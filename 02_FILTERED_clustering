@@ -1,0 +1,696 @@
+# ADDITIONAL INFORMATION PROVIDED HERE
+
+# Seurat v5.1.0.
+# SeuratObject v5.0.2.
+
+
+# Load Libraries ----
+# Close libaries
+if("Seurat" %in% (.packages())){
+  detach("package:Seurat", unload=TRUE) 
+}
+
+if("SeuratObject" %in% (.packages())){
+  detach("package:SeuratObject", unload=TRUE) 
+}
+
+library(clustree)
+library(cowplot)
+library(dittoSeq)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+library(glmGamPoi)
+library(harmony)
+library(hdf5r)
+library(matrixStats)
+library(metafolio)
+library(patchwork)
+# library(presto)
+library(RColorBrewer)
+library(readxl)
+library(sctransform)
+# library(SeuratDisk)
+library(Seurat)
+# library(SeuratData)
+library(writexl)
+
+
+print("!!! LIBRARIES LOADED SUCCESSFULLY. !!!")
+
+# STEP 1: Set working directory & sample information. ----
+setwd("E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/")
+data_path = "E:/MSc_EMC_project/Main_project/SR_outs/"
+
+# SAMPLE INFORMATION
+info_samples.xlsx <- read_excel("E:/MSc_EMC_project/Main_project/Main File_snRNAseq cases_v3xlsx.xlsx",
+                                sheet = "Sheet1", range = "B1:E139")
+colnames(info_samples.xlsx) <- c("PA_number", "Diagnosis", "ZIS", "Gender")
+
+print("!!! STEP 1 FINISHED. !!!")
+
+# STEP 2: Load data & find HVGs. ----
+
+# Load data
+filtered_combined_samples <- readRDS("E:/MSc_EMC_project/Main_Project/01_QC_outs/Visium_samples_filtered_combined_QC_5removed.RDS")
+# Normalize 
+filtered_combined_samples <- NormalizeData(filtered_combined_samples, normalization.method = 'LogNormalize',
+                                  scale.factor = 10000, verbose = F)
+
+# Find highly variable genes (HVGs)
+# Create empty HVGs list
+hvgs_list <- NULL
+
+# Set identities to original identities.
+Idents(filtered_combined_samples) <- "orig.ident"
+
+# # Set image keys to corresponding sample
+# for(x in 1:length(names(filtered_combined_samples@images))){
+#   filtered_combined_samples@images[[x]]@key <- names(filtered_combined_samples@images)[[x]]
+# }
+
+# Find HGVs for each sample
+for(sample in unique(filtered_combined_samples$orig.ident)) {
+  # For each sample, subset it with the corresponding sample identity.
+  x <- subset(filtered_combined_samples, idents = sample)
+  
+  # Find variable features for each sample.
+  x <- FindVariableFeatures(x, selection.method = "vst",
+                            nfeatures = 3000)
+  
+  # Add to list under sample name.
+  hvgs_list[[sample]] <- x@assays$Spatial@meta.data$var.features
+}
+
+# Unlist and turn into character.
+hvgs_list <- unlist(hvgs_list)
+
+# Create HVGs table, sort by decreasing gene frequency.
+hvgs_list <- table(hvgs_list) %>%
+  sort(decreasing = T)
+
+# Get names of top 3000 genes.
+gene_selection <- hvgs_list[1:3000] %>% 
+  names()
+
+print("!!! STEP 2 FINISHED. !!!")
+
+# STEP 3: Dimensionality reduction & visualization. ----
+# PCA prep.
+filtered_combined_samples <- ScaleData(filtered_combined_samples, verbose = F)
+# Perform PCA using top 3000 highly variable genes.
+filtered_combined_samples <- RunPCA(filtered_combined_samples, verbose = F,
+                           npcs = 30, features = gene_selection)
+
+plot_1 <- ElbowPlot(filtered_combined_samples, ndims = 20) + ggtitle("PCA elbow plot")
+ggsave("01_ElbowPlot_PCA.jpeg",
+       width = 5)
+
+print("!!! STEP 3 FINISHED. !!!")
+
+# STEP 4: Harmony integration & clustering. ----
+
+## 4.1. Perform Harmony integration & clustering. ----
+filtered_combined_samples <- RunHarmony(filtered_combined_samples,
+                               group.by.vars = "orig.ident", 
+                               plot_convergence = T,
+                               assay.use = "Spatial", max_iter = 20)
+
+# Elbow plot post-Harmony integration.
+plot_1 <- ElbowPlot(filtered_combined_samples, ndims = 20, reduction = "harmony") +
+  ggtitle("Harmony integration elbow plot")
+ggsave("02_ElbowPlot_Harmony.jpeg", plot_1,
+       width = 5)
+
+# Simple clustering based on Harmony dimensions
+filtered_combined_samples <- RunUMAP(filtered_combined_samples, reduction = "harmony",
+                            dims = 1:15)
+filtered_combined_samples <- FindNeighbors(filtered_combined_samples, 
+                                  reduction = "harmony", dims = 1:15)
+filtered_combined_samples <- identity(filtered_combined_samples)
+
+# Dimplots
+plot_1 <- DimPlot(filtered_combined_samples, group.by = "diag", label = T, pt.size = 1,
+                  reduction = "umap")
+ggsave("03_DimPlot_umap_diag.jpeg", plot_1,
+       height = 10, width = 12)
+
+plot_1 <- DimPlot(filtered_combined_samples, label = T, pt.size = 1,
+                  reduction = "umap")
+ggsave("04_DimPlot_umap.jpeg", plot_1,
+       height = 10, width = 12)
+
+## 4.2. Clustering ----
+# Set resolutions
+resolutions <- seq(0.1, 1.0, 0.1)
+# Find clusters in resolutions range
+filtered_combined_samples <- FindClusters(filtered_combined_samples, resolution = resolutions,
+                                 verbose = F)
+
+# Optimize clustering
+# Obtain cell distances
+cell_dists <- dist(filtered_combined_samples@reductions$harmony@cell.embeddings,
+                   method = "euclidean")
+
+cluster_info <- filtered_combined_samples@meta.data[,grepl(paste0(DefaultAssay(filtered_combined_samples),"_snn_res"),
+                                                  colnames(filtered_combined_samples@meta.data))]
+cluster_info <- mutate_all(cluster_info, as.character)
+cluster_info <- mutate_all(cluster_info, as.numeric)
+
+# Apply function over cluster_info columns (0.1-1), score for each clustering resolution.
+silhouette_res <- apply(cluster_info, 2, function(x) {
+  # Silhouette width for each resolution.
+  si <- cluster::silhouette(x, cell_dists)
+  # If not NA, calculate mean.
+  if (!any(is.na(si[, 'sil_width']))) {
+    mean(si[, 'sil_width'])
+    # Else, return NA.
+  } else {
+    NA
+  }
+})
+
+# Turn into data frame.
+silhouette_res <- as.data.frame(silhouette_res)
+# Replace column names.
+silhouette_res$res <- gsub("Spatial_snn_res.","", rownames(silhouette_res))
+silhouette_res$res <- as.numeric(silhouette_res$res)
+
+# Plot results
+plot_1 <- ggplot(silhouette_res, aes(res,silhouette_res))+
+  geom_point()+
+  theme_classic()
+ggsave("05_silhouette_ress.jpeg", plot_1,
+       width = 5 , height = 5)
+
+# Remove items redundant in future analysis for memory space.
+rm(cell_dists)
+rm(x)
+rm(cluster_info)
+rm(hvgs_list)
+
+print("!!! STEP 4 FINISHED !!!")
+
+
+
+# STEP 5: Loop through resolutions & plot. ----
+
+# # Load reference data obtained from KPMP atlas.
+# ref_data <-  LoadH5Seurat("E:/MSc_EMC_project/Main_Project/12be772d-49bd-4abc-b08e-76684c2ef1f2_KPMPAtlas_PREMIER_062921.h5Seurat")
+# # Update the Seurat object
+# ref_data <- UpdateSeuratObject(ref_data)
+# 
+# # Save as RDS to obtain data more quickly in the future.
+# saveRDS(ref_data, "refdata_anchors.RDS")
+
+# Load the reference data.
+ref_data <- readRDS("E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/refdata_anchors.RDS")
+# Normalize
+ref_data <- NormalizeData(ref_data,
+                          normalization.method = 'LogNormalize', 
+                          scale.factor = 10000, verbose = F)
+DefaultAssay(ref_data) <- "RNA"
+
+# Predict the major celltype for each bead.
+anchors <- FindTransferAnchors(reference = ref_data, query = filtered_combined_samples,
+                               normalization.method = "LogNormalize", npcs = 50)
+
+# Standard Seurat label transfer workflow
+predictions <- TransferData(anchorset = anchors, refdata = ref_data$celltype, prediction.assay = TRUE,
+                            weight.reduction = filtered_combined_samples[["pca"]], dims = 1:30)
+
+filtered_combined_samples[["predictions"]] <- predictions
+DefaultAssay(filtered_combined_samples) <- "predictions"
+
+prediction_results <- t(as.data.frame(predictions@data))
+
+# Row names correspond to the cell names of the Seurat object 
+# Column names correspond to the metadata variables
+filtered_combined_samples <- AddMetaData(filtered_combined_samples, metadata = prediction_results)
+DefaultAssay(filtered_combined_samples) <- "Spatial"
+
+# Create empty plot list and set x to 1.
+plot_list <- list()
+x <- 1
+# Try different resolutions: 0.3-0.7
+for (res in seq(0.3, 0.7, 0.1)) {
+  print(paste0("Current resolution: ", res))
+  
+  # Find clusters at the set resolution
+  filtered_combined_samples <- FindClusters(filtered_combined_samples, resolution = res, verbose = F)
+  
+  plot_list[[x]] <- DimPlot(filtered_combined_samples, label = T, label.size = 8) +
+    NoLegend() + labs(title = res)
+
+  
+  # Find marker genes
+  all_markers <- FindAllMarkers(filtered_combined_samples, min.pct = 0.3, logfc.threshold = 0.3,
+                                assay = "Spatial", only.pos = T)
+  # Obtain genes with positive log2FC & with adj p-values below 0.01
+  all_markers <- all_markers[all_markers$p_val_adj < 0.01, ]
+  
+  # Obtain top 10 marker genes per cluster.
+  top10 <- all_markers %>% 
+    # Group marker genes by cluster number.
+    group_by(cluster) %>% 
+    # Obtain top 10 genes per cluster based on avg log2FC in cluster.
+    top_n(n = 10, wt = avg_log2FC) %>% 
+    # Extract gene names.
+    pull(gene)
+  
+  filtered_combined_samples <- ScaleData(filtered_combined_samples, features = unique(all_markers$gene))
+  seurat_cluster_colors <- gg_color_hue(length(levels(filtered_combined_samples$seurat_clusters)))
+  
+  # Plot heatmaps
+  heatmap <- DoHeatmap(filtered_combined_samples,
+                       features = top10, group.by = "seurat_clusters",
+                       slot = "scale.data", label = TRUE) +
+    theme(axis.text.y = element_text(size = 7))
+  
+  # Save grouped heatmap.
+  ggsave(filename = paste0("niche_res/", res, "_Grouped_CM_subcluster_allmarkers_heatmap.jpeg"),
+         plot = heatmap, width = 20, height = 20, limitsize = F)
+  
+  x <- x + 1
+  
+}
+
+
+plot_1 <- wrap_plots(plot_list)
+ggsave(filename = "niche_res/CM_subcluster_umap_seurat_cluster_resolutions.jpeg", plot_1,
+       width = 20 , height = 20)
+
+# Visualize clusters using clustree.
+x <- clustree(filtered_combined_samples) + labs(title = "Clustree all samples")
+ggsave("06_clustree_filtered_combined_samples.jpeg", x,
+       width = 10, height = 10)
+
+# Save after Harmony integration and clustering.
+saveRDS(filtered_combined_samples, "Visium_filtered_combined_samples_harmony_corrected.RDS")
+
+print("!!! STEP 5 FINISHED !!!")
+
+
+
+
+
+# STEP 6: Use chosen resolution & plot. ----
+filtered_combined_samples <- readRDS("./Visium_filtered_combined_samples_harmony_corrected.RDS")
+
+# Find clusters using chosen resolution.
+filtered_combined_samples <- FindClusters(filtered_combined_samples, resolution = 0.4)
+# Find marker genes
+all_markers <- FindAllMarkers(filtered_combined_samples, min.pct = 0.3, logfc.threshold = 0.3,
+                              assay = "Spatial")
+# Save as Excel file.
+write_xlsx(all_markers, path = "filtered_combined_samples_AllMarkers.xlsx")
+
+# Obtain genes with positive log2FC & with adj p-values below 0.01
+all_markers <- all_markers[all_markers$avg_log2FC > 0 & all_markers$p_val_adj < 0.01, ]
+# Save as Excel file.
+write_xlsx(all_markers, path = "filtered_combined_samples_PosMarkers_p-val_below_0.01.xlsx")
+
+
+## 6.1. Dotplot/Heatmap TOP 3 GENES per cluster. ----
+# Obtain top 3 genes per cluster based on avg log2FC in cluster.
+gene_clusters <- group_by(all_markers, cluster)
+top3_gene_clusters <- top_n(gene_clusters, n = 3, wt = avg_log2FC)
+
+
+# Dotplots of top3 genes per cluster.
+plot <- DotPlot(filtered_combined_samples, features = top3_gene_clusters$gene,
+        group.by = 'seurat_clusters') + labs(title = paste0("Top 3 genes per cluster")) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 8)) +
+  scale_colour_gradient2(
+    low = "darkblue",
+    mid = "whitesmoke",
+    high = "indianred",
+    midpoint = 0)
+
+# Save as Excel file & save dotplot.
+write_xlsx(top3_gene_clusters, path = "dotplots/top3_Dotplot.xlsx")
+ggsave(filename = paste0("dotplots/top3_Dotplot.jpeg"),
+       plot = plot, limitsize = F, width = 12)
+
+# Heatmap of top3 genes per cluster.
+heatmap <- DoHeatmap(filtered_combined_samples,
+                     features = top3_gene_clusters$gene, group.by = "seurat_clusters", size = 4,
+                     slot = "scale.data", label = TRUE) + 
+  labs(title = paste0("Top 3 genes per cluster")) 
+ggsave(filename = paste0("dotplots/top3_heatmap.jpeg"),
+       plot = heatmap, limitsize = F, width = 12)
+
+## 6.2. Dotplot/Heatmap TOP 10 GENES per cluster. ----
+# Obtain top 10 genes per cluster based on avg log2FC in cluster.
+top10_gene_clusters <- top_n(gene_clusters, n = 10, wt = avg_log2FC)
+
+# Dotplots of top10 genes per cluster.
+plot <- DotPlot(filtered_combined_samples, features = top10_gene_clusters$gene,
+                group.by = 'seurat_clusters') + labs(title = paste0("Top 10 genes per cluster")) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 8)) +
+  scale_colour_gradient2(
+    low = "darkblue",
+    mid = "whitesmoke",
+    high = "indianred",
+    midpoint = 0)
+
+# Save as Excel file & save dotplot.
+write_xlsx(top10_gene_clusters, path = "dotplots/top10_Dotplot.xlsx")
+ggsave(filename = paste0("dotplots/top10_Dotplot.jpeg"),
+       plot = plot, limitsize = F, width = 25)
+
+# Heatmap of top3 genes per cluster.
+heatmap <- DoHeatmap(filtered_combined_samples,
+                     features = top10_gene_clusters$gene, group.by = "seurat_clusters", size = 4,
+                     slot = "scale.data", label = TRUE) + 
+  labs(title = paste0("Top 10 genes per cluster")) 
+ggsave(filename = paste0("dotplots/top10_heatmap.jpeg"),
+       plot = heatmap, limitsize = F, width = 12, height = 15)
+
+
+print("!!! STEP 6 FINISHED !!!")
+
+
+
+# STEP 7: Barplots. ----
+
+# Barplot per DIAGNOSIS.
+barplot_1 <- dittoBarPlot(object = filtered_combined_samples,
+                          var = "seurat_clusters",
+                          group.by = "diag",
+                          scale = 'count',
+                          main = "Composition of clusters per diagnosis (count)",
+                          legend.title = "Cluster no.") 
+
+barplot_2 <- dittoBarPlot(object = filtered_combined_samples,
+                          var = "seurat_clusters",
+                          group.by = "diag",
+                          scale = 'percent',
+                          main = "Composition of clusters per diagnosis (%)",
+                          legend.title = "Cluster no.") 
+
+ggsave("07_Barplots_bydiag.jpeg" , wrap_plots(barplot_1, barplot_2),
+       width = 20, height = 10)
+
+
+# Barplot per SAMPLE.
+barplot_3 <- dittoBarPlot(object = filtered_combined_samples,
+                          var = "seurat_clusters",
+                          group.by = "orig.ident",
+                          scale = 'count',
+                          main = "Composition of clusters per sample (count)",
+                          legend.title = "Cluster no.")
+
+barplot_4 <- dittoBarPlot(object = filtered_combined_samples,
+                          var = "seurat_clusters",
+                          group.by = "orig.ident",
+                          scale = 'percent',
+                          main = "Composition of clusters per sample (%)",
+                          legend.title = "Cluster no.") 
+
+ggsave("08_Barplots_bysample.jpeg" , wrap_plots(barplot_3, barplot_4),
+       width = 20, height = 10)
+
+# Save all barplots.
+ggsave("09_Barplots.jpeg", wrap_plots(barplot_1, barplot_2,barplot_3, barplot_4),
+       height = 20, width = 20)
+
+ggsave("09.5_Barplots.jpeg", wrap_plots(barplot_2,barplot_4),
+       height = 15, width = 20)
+
+print("!!! STEP 7 FINISHED !!!")
+
+
+# STEP 8: SpatialDimPlots. ----
+
+p <- distinct(filtered_combined_samples@meta.data, orig.ident, diag)
+
+plot_list <- list()
+x <- 1
+
+for(sample in names(filtered_combined_samples@images)){
+  
+  d <- p$diag[which(p$orig.ident == sample)]
+  
+  plot_list[[x]] <- SpatialDimPlot(filtered_combined_samples, group.by = "seurat_clusters", label = TRUE,
+                                   images = sample, crop = F, pt.size.factor =  1.6, label.size = 4) + 
+    NoLegend() + labs(title = paste0(sample, " (", d, ")"))
+  
+  x <- x + 1
+}
+
+# Wrap and save Dimplot per Visium sample.
+ggsave("10.1_SpatialDimPlots.jpeg", wrap_plots(plot_list[1:2]),
+       width = 15, height = 9)
+ggsave("10.2_SpatialDimPlots.jpeg", wrap_plots(plot_list[3:5]),
+       width = 25, height = 9)
+ggsave("10.3_SpatialDimPlots.jpeg", wrap_plots(plot_list[6:7]),
+       width = 15, height = 9)
+ggsave("10.4_SpatialDimPlots.jpeg", wrap_plots(plot_list[8:10]),
+       width = 25, height = 9)
+# Save all.
+ggsave("10.5_SpatialDimPlots_ALL.jpeg", wrap_plots(plot_list, ncol = 3), 
+       height = 30, width = 20)
+
+print("!!! STEP 8 FINISHED !!!")
+
+
+# STEP 9: Volcano plots ----
+## 9.1. IFTA vs TCMR ----
+Idents(filtered_combined_samples) <- "diag"
+IFTAvsTCMR <- FindMarkers(filtered_combined_samples,
+                          ident.1 = "IFTA", ident.2 = c('aTCMR1B','aTCMR2B'))
+IFTAvsTCMR <- IFTAvsTCMR[IFTAvsTCMR$p_val_adj != 0 & IFTAvsTCMR$p_val_adj <= 0.05,]
+# Add genes as separate column.
+IFTAvsTCMR$gene <- rownames(IFTAvsTCMR)
+
+IFTAvsTCMR$up_down <- "NA"
+IFTAvsTCMR$up_down[IFTAvsTCMR$avg_log2FC > 0.6] <- "UP"
+IFTAvsTCMR$up_down[IFTAvsTCMR$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(IFTAvsTCMR, (avg_log2FC > 3 | avg_log2FC < -3 | p_val_adj < (1/(10^290))))
+
+to_save <- ggplot(IFTAvsTCMR, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                       colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 5, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "IFTA vs aTCMR1B/aTCMR2B", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(IFTAvsTCMR, path = "volcano_plots/01_IFTAvsTCMR.xlsx")
+ggsave("volcano_plots/01_IFTAvsTCMR.jpeg", plot = to_save,
+       height = 10, width = 10)
+ 
+
+## 9.2. IFTA vs AMR ----
+IFTAvsAMR <- FindMarkers(filtered_combined_samples,
+                         ident.1 = "IFTA", ident.2 = 'aAMR, C4d+')
+IFTAvsAMR <- IFTAvsAMR[IFTAvsAMR$p_val_adj != 0 & IFTAvsAMR$p_val_adj <= 0.05,]
+# Add genes as separate column.
+IFTAvsAMR$gene <- rownames(IFTAvsAMR)
+
+IFTAvsAMR$up_down <- "NA"
+IFTAvsAMR$up_down[IFTAvsAMR$avg_log2FC > 0.6] <- "UP"
+IFTAvsAMR$up_down[IFTAvsAMR$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(IFTAvsAMR, (avg_log2FC > 6 | avg_log2FC < -2 | p_val_adj < (1/(10^200)) | 
+                                 avg_log2FC > 3 & p_val_adj < (1/(10^150))))
+
+to_save <- ggplot(IFTAvsAMR, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                      colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 8, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "IFTA vs AMR", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(IFTAvsAMR, path = "volcano_plots/03_IFTAvsAMR.xlsx")
+ggsave("volcano_plots/02_IFTAvsAMR.jpeg", plot = to_save,
+       height = 10, width = 10)
+
+## 9.3. TCMR vs AMR ----
+TCMRvsAMR <- FindMarkers(filtered_combined_samples,
+                         ident.1 = c('aTCMR1B', 'aTCMR2B'), ident.2 = 'aAMR, C4d+')
+TCMRvsAMR <- TCMRvsAMR[TCMRvsAMR$p_val_adj != 0 & TCMRvsAMR$p_val_adj <= 0.05,]
+# Add genes as separate column.
+TCMRvsAMR$gene <- rownames(TCMRvsAMR)
+
+TCMRvsAMR$up_down <- "NA"
+TCMRvsAMR$up_down[TCMRvsAMR$avg_log2FC > 0.6] <- "UP"
+TCMRvsAMR$up_down[TCMRvsAMR$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(TCMRvsAMR, (avg_log2FC > 7 | avg_log2FC < -3 | p_val_adj < (1/(10^235))))
+
+to_save <- ggplot(TCMRvsAMR, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                      colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 12, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "TCMR vs AMR", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(TCMRvsAMR, path = "volcano_plots/03_TCMRvsAMR.xlsx")
+ggsave("volcano_plots/06_TCMRvsAMR.jpeg", plot = to_save,
+       height = 10, width = 10)
+
+
+
+# Removed from analysis ----
+## 9.4. IFTA vs [AMR and HLAi] ----
+IFTAvsAMR_HLAi <- FindMarkers(filtered_combined_samples,
+                              ident.1 = "IFTA", ident.2 = c('aAMR, C4d+','HLAi'))
+IFTAvsAMR_HLAi <- IFTAvsAMR_HLAi[IFTAvsAMR_HLAi$p_val_adj != 0 & IFTAvsAMR_HLAi$p_val_adj <= 0.05,]
+# Add genes as separate column.
+IFTAvsAMR_HLAi$gene <- rownames(IFTAvsAMR_HLAi)
+
+IFTAvsAMR_HLAi$up_down <- "NA"
+IFTAvsAMR_HLAi$up_down[IFTAvsAMR_HLAi$avg_log2FC > 0.6] <- "UP"
+IFTAvsAMR_HLAi$up_down[IFTAvsAMR_HLAi$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(IFTAvsAMR_HLAi, (avg_log2FC > 4 | avg_log2FC < -3 | p_val_adj < (1/(10^200))))
+
+to_save <- ggplot(IFTAvsAMR_HLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                                      colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "IFTA vs [AMR and HLAi]", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf) +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(IFTAvsAMR_HLAi, path = "volcano_plots/02_IFTAvsAMR_HLAi.xlsx")
+ggsave("volcano_plots/04_IFTAvsAMR_HLAi.jpeg", plot = to_save,
+       width = 10)
+
+## 9.5. IFTA vs HLAi ----
+IFTAvsHLAi <- FindMarkers(filtered_combined_samples,
+                          ident.1 = 'IFTA', ident.2 = 'HLAi')
+IFTAvsHLAi <- IFTAvsHLAi[IFTAvsHLAi$p_val_adj != 0 & IFTAvsHLAi$p_val_adj <= 0.05,]
+# Add genes as separate column.
+IFTAvsHLAi$gene <- rownames(IFTAvsHLAi)
+
+IFTAvsHLAi$up_down <- "NA"
+IFTAvsHLAi$up_down[IFTAvsHLAi$avg_log2FC > 0.6] <- "UP"
+IFTAvsHLAi$up_down[IFTAvsHLAi$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(IFTAvsHLAi, (avg_log2FC > 3.5 | avg_log2FC < -3 | p_val_adj < (1/(10^150))))
+
+to_save <- ggplot(IFTAvsHLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                                  colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "IFTA vs HLAi", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf) +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(IFTAvsHLAi, path = "volcano_plots/04_IFTAvsHLAi.xlsx")
+ggsave("volcano_plots/05_IFTAvsHLAi.jpeg", plot = to_save,
+       width = 10)
+
+## 9.6. TCMR vs [AMR and HLAi] ----
+TCMRvsAMR_HLAi <- FindMarkers(filtered_combined_samples,
+                              ident.1 = c("aTCMR1B", "aTCMR2B"), ident.2 = c('aAMR, C4d+','HLAi'))
+TCMRvsAMR_HLAi <- TCMRvsAMR_HLAi[TCMRvsAMR_HLAi$p_val_adj != 0 & TCMRvsAMR_HLAi$p_val_adj <= 0.05,]
+# Add genes as separate column.
+TCMRvsAMR_HLAi$gene <- rownames(TCMRvsAMR_HLAi)
+
+TCMRvsAMR_HLAi$up_down <- "NA"
+TCMRvsAMR_HLAi$up_down[TCMRvsAMR_HLAi$avg_log2FC > 0.6] <- "UP"
+TCMRvsAMR_HLAi$up_down[TCMRvsAMR_HLAi$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(TCMRvsAMR_HLAi, (avg_log2FC > 5 | avg_log2FC < -3 | p_val_adj < (1/(10^235))))
+
+to_save <- ggplot(TCMRvsAMR_HLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                                      colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "TCMR vs [AMR and HLAi]", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf) +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(TCMRvsAMR_HLAi, path = "volcano_plots/05_TCMRvsAMR_HLAi.xlsx")
+ggsave("volcano_plots/06_TCMRvsAMR_HLAi.jpeg", plot = to_save,
+       width = 10)
+
+## 9.7. TCMR vs HLAi ----
+TCMRvsHLAi <- FindMarkers(filtered_combined_samples,
+                          ident.1 = c('aTCMR1B', 'aTCMR2B'), ident.2 = 'HLAi')
+TCMRvsHLAi <- TCMRvsHLAi[TCMRvsHLAi$p_val_adj != 0 & TCMRvsHLAi$p_val_adj <= 0.05,]
+
+# Add genes as separate column.
+TCMRvsHLAi$gene <- rownames(TCMRvsHLAi)
+
+TCMRvsHLAi$up_down <- "NA"
+TCMRvsHLAi$up_down[TCMRvsHLAi$avg_log2FC > 0.6] <- "UP"
+TCMRvsHLAi$up_down[TCMRvsHLAi$avg_log2FC < -0.6] <- "DOWN"
+
+# Label genes of interest.
+interest <- filter(TCMRvsHLAi, (avg_log2FC > 5 | avg_log2FC < -2 | p_val_adj < (1/(10^200))))
+
+to_save <- ggplot(TCMRvsHLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
+                                  colour = up_down, label = gene)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
+  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
+  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  labs(title = "TCMR vs HLAi", color = "") +
+  geom_text_repel(data = interest, max.overlaps = Inf) +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# Save as Excel file & save volcano plot.
+write_xlsx(TCMRvsHLAi, path = "volcano_plots/07_TCMRvsHLAi.xlsx")
+ggsave("volcano_plots/07_TCMRvsHLAi.jpeg", plot = to_save,
+       width = 10)
+
+print("!!! STEP 9 FINISHED. !!!")
+
+
