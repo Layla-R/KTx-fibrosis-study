@@ -212,6 +212,7 @@ ref_data <- NormalizeData(ref_data,
                           scale.factor = 10000, verbose = F)
 DefaultAssay(ref_data) <- "RNA"
 
+# Source: https://satijalab.org/seurat/archive/v4.3/spatial_vignette
 # Predict the major celltype for each bead.
 anchors <- FindTransferAnchors(reference = ref_data, query = filtered_combined_samples,
                                normalization.method = "LogNormalize", npcs = 50)
