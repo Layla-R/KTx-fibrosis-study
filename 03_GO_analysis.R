@@ -1,0 +1,553 @@
+# ADDITIONAL INFORMATION PROVIDED HERE
+
+# Seurat v5.1.0.
+# SeuratObject v5.0.2.
+
+
+# Load Libraries ----
+# Close libaries
+if("Seurat" %in% (.packages())){
+  detach("package:Seurat", unload=TRUE) 
+}
+
+if("SeuratObject" %in% (.packages())){
+  detach("package:SeuratObject", unload=TRUE) 
+}
+
+
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+library(glmGamPoi)
+library(gprofiler2)
+library(readxl)
+library(sctransform)
+library(Seurat)
+library(stringr)
+require(svglite)
+library(tidyverse)
+# library(Vennerable)
+library(writexl)
+
+print("!!! LIBRARIES LOADED SUCCESSFULLY. !!!")
+
+# STEP 1: Set working directory & sample information. ----
+setwd("E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/")
+starting_directory <- getwd()
+
+# SAMPLE INFORMATION
+info_samples.xlsx <- read_excel("E:/MSc_EMC_project/Main_project/Main File_snRNAseq cases_v3xlsx.xlsx",
+                                sheet = "Sheet1", range = "B1:E139")
+colnames(info_samples.xlsx) <- c("PA_number", "Diagnosis", "ZIS", "Gender")
+
+print("!!! STEP 1 FINISHED. !!!")
+
+# STEP 2: Set parameters. ----
+test <- "MAST"
+top10_GO <- 10
+marker_genes_no <- 30 # or: no_marker_genes <- "ALL"
+
+# Define diagnoses.
+IFTA <- "IFTA"
+TCMR <- c("aTCMR1B", "aTCMR2B")
+AMR <- "aAMR, C4d+"
+
+print("!!! STEP 2 FINISHED. !!!")
+
+# STEP 3: Load data & cluster ----
+filtered_combined_samples <- readRDS("E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/Visium_filtered_combined_samples_harmony_corrected.RDS")
+# Find clusters using chosen resolution.
+filtered_combined_samples <- FindClusters(filtered_combined_samples, resolution = 0.4)
+
+# Add column with cluster no. and diagnosis.
+filtered_combined_samples$clusterno_diag <- paste(filtered_combined_samples$seurat_clusters,
+                                                filtered_combined_samples$diag, sep = "_")
+Idents(filtered_combined_samples) <- "clusterno_diag"
+
+print("!!! STEP 3 FINISHED. !!!")
+
+# STEP 4: GO Analysis per cluster. ----
+## 4.1. IFTA vs TCMR ----
+
+out_IFTAvsTCMR <- NULL
+dir.create("percluster_IFTAvsTCMR")
+setwd(paste0(starting_directory,"/percluster_IFTAvsTCMR"))
+
+for (cluster in levels(filtered_combined_samples@meta.data$seurat_clusters)) {
+  dir.create(paste0(cluster))
+  }
+
+
+for (cluster in levels(filtered_combined_samples@meta.data$seurat_clusters)) {
+  # Set cluster no.
+  cluster_no <- cluster
+  print(paste0("Current cluster: ", cluster_no))
+  
+  IFTAvsTCMR <- FindMarkers(filtered_combined_samples,
+                                   test.use = "MAST",
+                                   min.pct = 0.25, logfc.threshold = 0.3,
+                                   ident.1 = paste0(cluster_no, "_", IFTA), 
+                                   ident.2 = paste0(cluster_no, "_", TCMR))
+  
+  # Sort by avg_log2FC.
+  IFTAvsTCMR <- arrange(IFTAvsTCMR, -avg_log2FC)
+  # Add genes as separate column.
+  IFTAvsTCMR$gene <- rownames(IFTAvsTCMR)
+  # Add cluster no.
+  IFTAvsTCMR$cluster <- cluster_no
+  
+  # Create or add data to dataframe if cluster_no != 0.
+  if (cluster_no == 0){
+  out_IFTAvsTCMR <- IFTAvsTCMR
+  }
+  else {
+    out_IFTAvsTCMR <- rbind(out_IFTAvsTCMR, IFTAvsTCMR)
+  }
+  
+  # Save as Excel file.
+  write_xlsx(IFTAvsTCMR, path = paste0(cluster_no, "/", "cl_IFTAvsTCMR.xlsx"))
+  
+  top_10_top <- rownames(out_IFTAvsTCMR)[1:10]
+  top_10_bottom <- rownames(tail(out_IFTAvsTCMR, n = 10))
+  top_10_tb <- c(top_10_top, top_10_bottom)
+  Idents(filtered_combined_samples) <- "seurat_clusters"
+  
+  to_save <- VlnPlot(subset(filtered_combined_samples, idents = cluster_no), 
+          features = top_10_tb, split.by = "diag", 
+          pt.size = 0.1, col = palette.colors(palette = "Okabe-Ito")[4:8]) + RestoreLegend()
+  ggsave(paste0(cluster_no, "/", "cl_top_10_tb_VlnPlot.jpeg"),
+         width = 25, height = 25)
+  
+  Idents(filtered_combined_samples) <- "clusterno_diag"
+  
+  # Obtain upregulated and downregulated genes.
+  upregulated <- IFTAvsTCMR$gene[IFTAvsTCMR$avg_log2FC > 0 & 
+                                   IFTAvsTCMR$p_val_adj < 0.01]
+  downregulated <- IFTAvsTCMR$gene[IFTAvsTCMR$avg_log2FC < 0 & 
+                                     IFTAvsTCMR$p_val_adj < 0.01]
+  all_genes <- IFTAvsTCMR$gene[IFTAvsTCMR$p_val_adj < 0.01]
+  
+  IFTAvsTCMR <- arrange(IFTAvsTCMR, p_val)
+  
+  # GO
+  GO_upregulated <- gost(query = upregulated, 
+                         organism = "hsapiens", ordered_query = T,
+                         correction_method = "g_SCS", domain_scope = "annotated")
+  GO_downregulated <- gost(query = downregulated, 
+                           organism = "hsapiens", ordered_query = T,
+                           correction_method = "g_SCS", domain_scope = "annotated")
+  GO_allgenes <- gost(query = all_genes, 
+                      organism = "hsapiens", ordered_query = T,
+                      correction_method = "g_SCS", domain_scope = "annotated")
+  
+  # Save to dataframe, upregulated - downregulated - all
+  #UP
+  results_GO_upregulated <- GO_upregulated$result
+  results_GO_upregulated$cluster <- as.numeric(cluster_no)
+  results_GO_upregulated$up_down <- "UP"
+  
+  # DOWN
+  results_GO_downregulated <- GO_downregulated$result
+  results_GO_downregulated$cluster <- as.numeric(cluster_no)
+  results_GO_downregulated$up_down <- "UP"
+  
+  # ALL
+  results_GO_all <- GO_allgenes$result
+  results_GO_all$cluster <- as.numeric(cluster_no)
+  results_GO_all$up_down <- "ALL"
+  
+  # Plots top 10 of upregulated - downregulated - all
+  # UP
+  GO_upregulated$result <- arrange(GO_upregulated$result, p_value)
+  plot <- gostplot(GO_upregulated, capped = F, interactive = F) + labs(title = "GSE of upregulated genes (Top 10)", 
+                                                                       subtitle = "IF/TA vs TCMR")
+  publish_gostplot(plot, highlight_terms = GO_upregulated$result$term_id[1:10],
+                   width = 15, height = 12,
+                   filename = paste0(cluster_no, "/", "cl_GO_top10_upregulated.jpeg"))
+  
+  # DOWN
+  GO_downregulated$result <- arrange(GO_downregulated$result, p_value)
+  plot <- gostplot(GO_downregulated, capped = F, interactive = F) + labs(title = "GSE of downregulated genes (Top 10)", 
+                                                                        subtitle = "IF/TA vs TCMR")
+  publish_gostplot(plot, highlight_terms = GO_downregulated$result$term_id[1:10],
+                   width = 15, height = 12,
+                   filename = paste0(cluster_no, "/", "cl_GO_top10_downregulated.jpeg"))
+  #ALL
+  GO_allgenes$result <- arrange(GO_allgenes$result, p_value)
+  plot <- gostplot(GO_allgenes, capped = F, interactive = F) + labs(title = "GSE of all genes (Top 10)", 
+                                                                         subtitle = "IF/TA vs TCMR")
+  publish_gostplot(plot, highlight_terms = GO_allgenes$result$term_id[1:10],
+                   width = 15, height = 12,
+                   filename = paste0(cluster_no, "/", "cl_GO_top10_all.jpeg"))
+  
+  if (cluster_no == 0){
+    GO_results <- rbind(results_GO_upregulated, results_GO_downregulated, results_GO_all)
+  }
+  else{
+  GO_results_new <- rbind(results_GO_upregulated, results_GO_downregulated, results_GO_all)
+  GO_results <- rbind(GO_results, GO_results_new)
+  }
+  
+  # Save results
+  saveRDS(GO_results,
+          file = paste0(cluster_no, "/", "cl_gProfiler.RDS"))
+  saveRDS(out_IFTAvsTCMR,
+          paste0(cluster_no, "/", "cl_DE_FindMarkers_gProfiler.RDS"))
+  write_xlsx(out_IFTAvsTCMR,
+             paste0(cluster_no, "/", "cl_DE_FindMarkers_gProfiler.RDS"))
+  
+  print(paste0("Cluster ", cluster_no, " done."))
+  
+}  
+  
+  
+    
+## 4.2. IFTA vs AMR ----
+setwd(starting_directory)
+out_IFTAvsAMR <- NULL
+dir.create("percluster_IFTAvsAMR")
+setwd(paste0(starting_directory,"/percluster_IFTAvsAMR"))
+
+for (cluster in levels(filtered_combined_samples@meta.data$seurat_clusters)) {
+  dir.create(paste0(cluster))
+}
+
+for (cluster in levels(filtered_combined_samples@meta.data$seurat_clusters)) {
+  # Set cluster no.
+  cluster_no <- cluster
+  print(paste0("Current cluster: ", cluster_no))
+  
+  IFTAvsAMR <- FindMarkers(filtered_combined_samples,
+                            test.use = "MAST",
+                            min.pct = 0.25, logfc.threshold = 0.3,
+                            ident.1 = paste0(cluster_no, "_", IFTA), 
+                            ident.2 = paste0(cluster_no, "_", AMR))
+  
+  # Sort by avg_log2FC.
+  IFTAvsAMR <- arrange(IFTAvsAMR, -avg_log2FC)
+  # Add genes as separate column.
+  IFTAvsAMR$gene <- rownames(IFTAvsAMR)
+  # Add cluster no.
+  IFTAvsAMR$cluster <- cluster_no
+  
+  # Create or add data to dataframe if cluster_no != 0.
+  if (cluster_no == 0){
+    out_IFTAvsAMR <- IFTAvsAMR
+  }
+  else {
+    out_IFTAvsAMR <- rbind(out_IFTAvsAMR, IFTAvsAMR)
+  }
+  
+  # Save as Excel file.
+  write_xlsx(IFTAvsAMR, path = paste0(cluster_no, "/", "cl_IFTAvsAMR.xlsx"))
+  
+  top_10_top <- rownames(out_IFTAvsAMR)[1:10]
+  top_10_bottom <- rownames(tail(out_IFTAvsAMR, n = 10))
+  top_10_tb <- c(top_10_top, top_10_bottom)
+  Idents(filtered_combined_samples) <- "seurat_clusters"
+  
+  to_save <- VlnPlot(subset(filtered_combined_samples, idents = cluster_no), 
+                     features = top_10_tb, split.by = "diag", 
+                     pt.size = 0.1, col = palette.colors(palette = "Okabe-Ito")[4:8]) + RestoreLegend()
+  ggsave(paste0(cluster_no, "/", "cl_top_10_tb_VlnPlot.jpeg"),
+         width = 25, height = 25)
+  
+  Idents(filtered_combined_samples) <- "clusterno_diag"
+  
+  # Obtain upregulated and downregulated genes.
+  upregulated <- IFTAvsAMR$gene[IFTAvsAMR$avg_log2FC > 0 & 
+                                   IFTAvsAMR$p_val_adj < 0.01]
+  downregulated <- IFTAvsAMR$gene[IFTAvsAMR$avg_log2FC < 0 & 
+                                     IFTAvsAMR$p_val_adj < 0.01]
+  all_genes <- IFTAvsAMR$gene[IFTAvsAMR$p_val_adj < 0.01]
+  
+  IFTAvsAMR <- arrange(IFTAvsAMR, p_val)
+  
+  # GO
+  GO_upregulated <- gost(query = upregulated, 
+                         organism = "hsapiens", ordered_query = T,
+                         correction_method = "g_SCS", domain_scope = "annotated")
+  GO_downregulated <- gost(query = downregulated, 
+                           organism = "hsapiens", ordered_query = T,
+                           correction_method = "g_SCS", domain_scope = "annotated")
+  GO_allgenes <- gost(query = all_genes, 
+                      organism = "hsapiens", ordered_query = T,
+                      correction_method = "g_SCS", domain_scope = "annotated")
+  
+  # Save to dataframe, upregulated - downregulated - all
+  #UP
+  results_GO_upregulated <- GO_upregulated$result
+  results_GO_upregulated$cluster <- as.numeric(cluster_no)
+  results_GO_upregulated$up_down <- "UP"
+  
+  # DOWN
+  results_GO_downregulated <- GO_downregulated$result
+  results_GO_downregulated$cluster <- as.numeric(cluster_no)
+  results_GO_downregulated$up_down <- "UP"
+  
+  # ALL
+  results_GO_all <- GO_allgenes$result
+  results_GO_all$cluster <- as.numeric(cluster_no)
+  results_GO_all$up_down <- "ALL"
+  
+  # Plots top 10 of upregulated - downregulated - all
+  # UP
+  GO_upregulated$result <- arrange(GO_upregulated$result, p_value)
+  plot <- gostplot(GO_upregulated, capped = F, interactive = F) + labs(title = "GSE of upregulated genes (Top 10)", 
+                                                                       subtitle = "IF/TA vs AMR")
+  publish_gostplot(plot, highlight_terms = GO_upregulated$result$term_id[1:10],
+                   width = 15, height = 12,
+                   filename = paste0(cluster_no, "/", "cl_GO_top10_upregulated.jpeg"))
+  
+  # DOWN
+  GO_downregulated$result <- arrange(GO_downregulated$result, p_value)
+  plot <- gostplot(GO_downregulated, capped = F, interactive = F) + labs(title = "GSE of downregulated genes (Top 10)", 
+                                                                         subtitle = "IF/TA vs AMR")
+  publish_gostplot(plot, highlight_terms = GO_downregulated$result$term_id[1:10],
+                   width = 15, height = 12,
+                   filename = paste0(cluster_no, "/", "cl_GO_top10_downregulated.jpeg"))
+  #ALL
+  GO_allgenes$result <- arrange(GO_allgenes$result, p_value)
+  plot <- gostplot(GO_allgenes, capped = F, interactive = F) + labs(title = "GSE of all genes (Top 10)", 
+                                                                    subtitle = "IF/TA vs AMR")
+  publish_gostplot(plot, highlight_terms = GO_allgenes$result$term_id[1:10],
+                   width = 15, height = 12,
+                   filename = paste0(cluster_no, "/", "cl_GO_top10_all.jpeg"))
+  
+  if (cluster_no == 0){
+    GO_results <- rbind(results_GO_upregulated, results_GO_downregulated, results_GO_all)
+  }
+  else{
+    GO_results_new <- rbind(results_GO_upregulated, results_GO_downregulated, results_GO_all)
+    GO_results <- rbind(GO_results, GO_results_new)
+  }
+  
+  # Save results
+  saveRDS(GO_results,
+          file = paste0(cluster_no, "/", "cl_gProfiler.RDS"))
+  saveRDS(out_IFTAvsAMR,
+          paste0(cluster_no, "/", "cl_DE_FindMarkers_gProfiler.RDS"))
+  write_xlsx(out_IFTAvsAMR,
+             paste0(cluster_no, "/", "cl_DE_FindMarkers_gProfiler.RDS"))
+  
+  print(paste0("Cluster ", cluster_no, " done."))
+  
+}  
+
+
+
+
+# STEP 5: GO Analysis. ----
+## 5.1. IFTA vs TCMR ----
+setwd(starting_directory)
+
+out_IFTAvsTCMR <- NULL
+dir.create("IFTAvsTCMR")
+setwd(paste0(starting_directory,"/IFTAvsTCMR"))
+
+IFTAvsTCMR <- FindMarkers(filtered_combined_samples,
+                          test.use = "MAST",
+                          min.pct = 0.25, logfc.threshold = 0.3,
+                          ident.1 = IFTA, 
+                          ident.2 = TCMR)
+
+# Sort by avg_log2FC.
+IFTAvsTCMR <- arrange(IFTAvsTCMR, -avg_log2FC)
+# Add genes as separate column.
+IFTAvsTCMR$gene <- rownames(IFTAvsTCMR)
+
+out_IFTAvsTCMR <- IFTAvsTCMR
+
+# Save as Excel file.
+write_xlsx(IFTAvsTCMR, path = paste0("IFTAvsTCMR.xlsx"))
+
+top_10_top <- rownames(out_IFTAvsTCMR)[1:10]
+top_10_bottom <- rownames(tail(out_IFTAvsTCMR, n = 10))
+top_10_tb <- c(top_10_top, top_10_bottom)
+# Idents(filtered_combined_samples) <- "seurat_clusters"
+
+# to_save <- VlnPlot(subset(filtered_combined_samples, idents = cluster_no), 
+#                    features = top_10_tb, split.by = "diag", 
+#                    pt.size = 0.1, col = palette.colors(palette = "Okabe-Ito")[4:8]) + RestoreLegend()
+# ggsave(paste0(cluster_no, "/", "cl_top_10_tb_VlnPlot.jpeg"),
+#        width = 25, height = 25)
+
+# Idents(filtered_combined_samples) <- "clusterno_diag"
+
+# Obtain upregulated and downregulated genes.
+upregulated <- IFTAvsTCMR$gene[IFTAvsTCMR$avg_log2FC > 0 & 
+                                 IFTAvsTCMR$p_val_adj < 0.01]
+downregulated <- IFTAvsTCMR$gene[IFTAvsTCMR$avg_log2FC < 0 & 
+                                   IFTAvsTCMR$p_val_adj < 0.01]
+all_genes <- IFTAvsTCMR$gene[IFTAvsTCMR$p_val_adj < 0.01]
+
+IFTAvsTCMR <- arrange(IFTAvsTCMR, p_val)
+
+# GO
+GO_upregulated <- gost(query = upregulated, 
+                       organism = "hsapiens", ordered_query = T,
+                       correction_method = "g_SCS", domain_scope = "annotated")
+GO_downregulated <- gost(query = downregulated, 
+                         organism = "hsapiens", ordered_query = T,
+                         correction_method = "g_SCS", domain_scope = "annotated")
+GO_allgenes <- gost(query = all_genes, 
+                    organism = "hsapiens", ordered_query = T,
+                    correction_method = "g_SCS", domain_scope = "annotated")
+
+# Save to dataframe, upregulated - downregulated - all
+#UP
+results_GO_upregulated <- GO_upregulated$result
+# results_GO_upregulated$cluster <- as.numeric(cluster_no)
+results_GO_upregulated$up_down <- "UP"
+
+# DOWN
+results_GO_downregulated <- GO_downregulated$result
+# results_GO_downregulated$cluster <- as.numeric(cluster_no)
+results_GO_downregulated$up_down <- "UP"
+
+# ALL
+results_GO_all <- GO_allgenes$result
+# results_GO_all$cluster <- as.numeric(cluster_no)
+results_GO_all$up_down <- "ALL"
+
+# Plots top 10 of upregulated - downregulated - all
+# UP
+GO_upregulated$result <- arrange(GO_upregulated$result, p_value)
+plot <- gostplot(GO_upregulated, capped = F, interactive = F) + labs(title = "GSE of upregulated genes (Top 10)", 
+                                                                     subtitle = "IF/TA vs TCMR")
+publish_gostplot(plot, highlight_terms = GO_upregulated$result$term_id[1:10],
+                 width = 15, height = 12,
+                 filename = paste0("GO_top10_upregulated.jpeg"))
+
+# DOWN
+GO_downregulated$result <- arrange(GO_downregulated$result, p_value)
+plot <- gostplot(GO_downregulated, capped = F, interactive = F) + labs(title = "GSE of downregulated genes (Top 10)", 
+                                                                       subtitle = "IF/TA vs TCMR")
+publish_gostplot(plot, highlight_terms = GO_downregulated$result$term_id[1:10],
+                 width = 15, height = 12,
+                 filename = paste0("GO_top10_downregulated.jpeg"))
+#ALL
+GO_allgenes$result <- arrange(GO_allgenes$result, p_value)
+plot <- gostplot(GO_allgenes, capped = F, interactive = F) + labs(title = "GSE of all genes (Top 10)", 
+                                                                  subtitle = "IF/TA vs TCMR")
+publish_gostplot(plot, highlight_terms = GO_allgenes$result$term_id[1:10],
+                 width = 15, height = 12,
+                 filename = paste0("GO_top10_all.jpeg"))
+
+
+GO_results <- rbind(results_GO_upregulated, results_GO_downregulated, results_GO_all)
+
+# Save results
+saveRDS(GO_results,
+        file = paste0("gProfiler.RDS"))
+saveRDS(out_IFTAvsTCMR,
+        paste0("DE_FindMarkers_gProfiler.RDS"))
+write_xlsx(out_IFTAvsTCMR,
+           paste0("DE_FindMarkers_gProfiler.xlsx"))
+## 5.2. IFTA vs AMR ----
+setwd(starting_directory)
+
+out_IFTAvsAMR <- NULL
+dir.create("IFTAvsAMR")
+setwd(paste0(starting_directory,"/IFTAvsAMR"))
+
+IFTAvsAMR <- FindMarkers(filtered_combined_samples,
+                          test.use = "MAST",
+                          min.pct = 0.25, logfc.threshold = 0.3,
+                          ident.1 = IFTA, 
+                          ident.2 = AMR)
+
+# Sort by avg_log2FC.
+IFTAvsAMR <- arrange(IFTAvsTCMR, -avg_log2FC)
+# Add genes as separate column.
+IFTAvsAMR$gene <- rownames(IFTAvsTCMR)
+
+out_IFTAvsAMR <- IFTAvsTCMR
+
+# Save as Excel file.
+write_xlsx(IFTAvsAMR, path = paste0("IFTAvsTCMR.xlsx"))
+
+top_10_top <- rownames(out_IFTAvsAMR)[1:10]
+top_10_bottom <- rownames(tail(out_IFTAvsAMR, n = 10))
+top_10_tb <- c(top_10_top, top_10_bottom)
+# Idents(filtered_combined_samples) <- "seurat_clusters"
+
+# to_save <- VlnPlot(subset(filtered_combined_samples, idents = cluster_no), 
+#                    features = top_10_tb, split.by = "diag", 
+#                    pt.size = 0.1, col = palette.colors(palette = "Okabe-Ito")[4:8]) + RestoreLegend()
+# ggsave(paste0(cluster_no, "/", "cl_top_10_tb_VlnPlot.jpeg"),
+#        width = 25, height = 25)
+
+# Idents(filtered_combined_samples) <- "clusterno_diag"
+
+# Obtain upregulated and downregulated genes.
+upregulated <- IFTAvsAMR$gene[IFTAvsAMR$avg_log2FC > 0 & 
+                                 IFTAvsAMR$p_val_adj < 0.01]
+downregulated <- IFTAvsAMR$gene[IFTAvsAMR$avg_log2FC < 0 & 
+                                  IFTAvsAMR$p_val_adj < 0.01]
+all_genes <- IFTAvsAMR$gene[IFTAvsAMR$p_val_adj < 0.01]
+
+IFTAvsAMR <- arrange(IFTAvsAMR, p_val)
+
+# GO
+GO_upregulated <- gost(query = upregulated, 
+                       organism = "hsapiens", ordered_query = T,
+                       correction_method = "g_SCS", domain_scope = "annotated")
+GO_downregulated <- gost(query = downregulated, 
+                         organism = "hsapiens", ordered_query = T,
+                         correction_method = "g_SCS", domain_scope = "annotated")
+GO_allgenes <- gost(query = all_genes, 
+                    organism = "hsapiens", ordered_query = T,
+                    correction_method = "g_SCS", domain_scope = "annotated")
+
+# Save to dataframe, upregulated - downregulated - all
+#UP
+results_GO_upregulated <- GO_upregulated$result
+# results_GO_upregulated$cluster <- as.numeric(cluster_no)
+results_GO_upregulated$up_down <- "UP"
+
+# DOWN
+results_GO_downregulated <- GO_downregulated$result
+# results_GO_downregulated$cluster <- as.numeric(cluster_no)
+results_GO_downregulated$up_down <- "UP"
+
+# ALL
+results_GO_all <- GO_allgenes$result
+# results_GO_all$cluster <- as.numeric(cluster_no)
+results_GO_all$up_down <- "ALL"
+
+# Plots top 10 of upregulated - downregulated - all
+# UP
+GO_upregulated$result <- arrange(GO_upregulated$result, p_value)
+plot <- gostplot(GO_upregulated, capped = F, interactive = F) + labs(title = "GSE of upregulated genes (Top 10)", 
+                                                                     subtitle = "IF/TA vs AMR")
+publish_gostplot(plot, highlight_terms = GO_upregulated$result$term_id[1:10],
+                 width = 15, height = 12,
+                 filename = paste0("GO_top10_upregulated.jpeg"))
+
+# DOWN
+GO_downregulated$result <- arrange(GO_downregulated$result, p_value)
+plot <- gostplot(GO_downregulated, capped = F, interactive = F) + labs(title = "GSE of downregulated genes (Top 10)", 
+                                                                       subtitle = "IF/TA vs AMR")
+publish_gostplot(plot, highlight_terms = GO_downregulated$result$term_id[1:10],
+                 width = 15, height = 12,
+                 filename = paste0("GO_top10_downregulated.jpeg"))
+#ALL
+GO_allgenes$result <- arrange(GO_allgenes$result, p_value)
+plot <- gostplot(GO_allgenes, capped = F, interactive = F) + labs(title = "GSE of all genes (Top 10)", 
+                                                                  subtitle = "IF/TA vs AMR")
+publish_gostplot(plot, highlight_terms = GO_allgenes$result$term_id[1:10],
+                 width = 15, height = 12,
+                 filename = paste0("GO_top10_all.jpeg"))
+
+
+GO_results <- rbind(results_GO_upregulated, results_GO_downregulated, results_GO_all)
+
+# Save results
+saveRDS(GO_results,
+        file = paste0("gProfiler.RDS"))
+saveRDS(out_IFTAvsAMR,
+        paste0("DE_FindMarkers_gProfiler.RDS"))
+write_xlsx(out_IFTAvsAMR,
+           paste0("DE_FindMarkers_gProfiler.xlsx"))

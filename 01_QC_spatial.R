@@ -1,0 +1,1231 @@
+# ADDITIONAL INFORMATION PROVIDED HERE
+# Visium slide size:
+# 127 rows (Y)
+# 223 cols (X)
+
+# Seurat v5.0.2.
+# SeuratObject v5.0.1.
+
+
+# Open Libraries ----
+# Close libaries
+if("Seurat" %in% (.packages())){
+  detach("package:Seurat", unload=TRUE) 
+}
+
+if("SeuratObject" %in% (.packages())){
+  detach("package:SeuratObject", unload=TRUE) 
+}
+
+
+library(DESeq2)
+library(dplyr)
+library(ggfortify)
+library(ggplot2)
+library(ggpubr)
+library(glmGamPoi)
+library(harmony)
+library(hdf5r)
+library(matrixStats)
+# library(Matrix.utils)
+library(metafolio)
+library(patchwork)
+library(readxl)
+# library(scCustomize)
+library(sctransform)
+library(SeuratObject, lib.loc = 'C:/Users/Layla/Documents/R-packages') # Load 5.0.1.
+library(Seurat, lib.loc = 'C:/Users/Layla/Documents/R-packages') # Load 5.0.2.
+library(stringr)
+
+print("!!! LIBRARIES LOADED SUCCESSFULLY. !!!")
+
+# > STEP 1: Set directories & Sample Information [adjust for additional samples]. ----
+setwd("E:/MSc_EMC_project/Main_project/01_QC_outs/")
+data_path = "E:/MSc_EMC_project/Main_project/SR_outs/"
+
+# SAMPLE INFORMATION
+info_samples.xlsx <- read_excel("E:/MSc_EMC_project/Main_project/Main File_snRNAseq cases_v3xlsx.xlsx",
+                                sheet = "Sheet1", range = "B1:E139")
+colnames(info_samples.xlsx) <- c("PA_number", "Diagnosis", "ZIS", "Gender")
+
+# View(info_samples.xlsx)
+
+Visium_filenames <- c("BIO1_KH119_A", "BIO2_KH120_B", "BIO3_KH121_A",
+                  "BIO4_KH122_B", "BIO5_KH123_A", "BIO6_KH124_B")
+
+
+print("!!! STEP 1 FINISHED. !!!")
+
+# STEP 2: Load in Visium data & create plots. ----
+# Load in the Visium spatial data for each sample.
+for(sample in Visium_filenames){
+  # print(sample)
+  assign(`sample`, Load10X_Spatial(data.dir = paste0(data_path, sample, "_outs/outs/")))
+  print(paste0("Sample ", sample, " loaded."))
+}
+
+#### Quality Control (QC) plots
+
+#-------------#  nCOUNT_SPATIAL PLOTS #-------------# 
+plot_list <- list() # Create empty list to collect plot objects.
+
+for(i in 1:length(Visium_filenames)){
+    plot_no <- paste0("plot_", i) # Create plot number per sample.
+
+  # Apply SpatialFeaturePlot to each plot number.
+    plot_obj <- SpatialFeaturePlot(get(Visium_filenames[i]), features = "nCount_Spatial") +
+    theme(legend.position = "right") + ggtitle(Visium_filenames[i])
+  
+  plot_list[[plot_no]] <- plot_obj # Add plot object to list
+} 
+
+# Create and save plots
+to_save <- wrap_plots(plot_list)
+ggsave(to_save, filename = paste0("01_ALL_nCountSpatial_overview.jpeg"),
+       width = 10 , height = 5)
+
+# Clear plot_list
+plot_list <- list() # Create empty list to collect plot objects.
+
+#-------------#  nFEATURE_SPATIAL PLOTS #-------------# 
+for(i in 1:length(Visium_filenames)){
+  plot_no <- paste0("plot_", i) # Create plot number per sample.
+
+  # Apply SpatialFeaturePlot to each plot number.
+  plot_obj <- SpatialFeaturePlot(get(Visium_filenames[i]), features = "nFeature_Spatial") +
+    theme(legend.position = "right") + ggtitle(Visium_filenames[i])
+  
+  plot_list[[plot_no]] <- plot_obj # Add plot object to list
+} 
+
+# Create and save plots
+to_save <- wrap_plots(plot_list)
+ggsave(to_save, filename = paste0("02_ALL_nFeatureSpatial_overview.jpeg"),
+       width = 10 , height = 5)
+
+print("!!! STEP 2 FINISHED. !!!")
+
+# STEP 3: Subset Visium objects based on coordinates. ----
+# Create empty list to collect sample names.
+sample_list <- list()
+## -------# BIO1_KH119_A ----
+# # Overview plot to use as coordinate guidance.
+# SpatialFeaturePlot(BIO1_KH119_A, features = "nCount_Spatial")
+
+# Obtain sample coordinates.
+coords_sample <- BIO1_KH119_A@images$slice1@coordinates
+
+#-----# H14-5147 (TOP) #-----# 
+top <- with(coords_sample,
+                 col < 80)
+# Remove overlapping biopsies and artifacts.
+remove_section <- with(coords_sample,
+                       (col > 55 & row > 35) | (col > 30 & row > 80))
+top_biopsy <- rownames(coords_sample[top & !remove_section,])
+
+`H14-5147` <- subset(BIO1_KH119_A, cells = top_biopsy)
+plot_1 <- SpatialFeaturePlot(`H14-5147`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-5147 (HLAi); T")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-5147`)
+
+#-----# H16-8962 (MIDDLE) #-----# 
+middle <- with(coords_sample,
+                 col > 54 & col < 162)
+# Remove overlapping biopsies and artifacts.
+remove_section <- with(coords_sample,
+                       (row < 53 & col < 70) | (row > 60 & col > 130) )
+middle_biopsy <- rownames(coords_sample[middle & !remove_section,])
+
+`H16-8962` <- subset(BIO1_KH119_A, cells = middle_biopsy)
+plot_2 <- SpatialFeaturePlot(`H16-8962`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H16-8962 (IFTA); M")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H16-8962`)
+
+#-----# H14-11604 (BOTTOM) #-----# 
+bottom <- with(coords_sample,
+               col > 150)
+# Remove overlapping biopsies and artifacts.
+remove_section <- with(coords_sample,
+                       (row < 20 & col < 180) | (row > 100 & col > 190 ))
+  
+bottom_biopsy <- rownames(coords_sample[bottom & !remove_section,])
+
+`H14-11604` <- subset(BIO1_KH119_A, cells = bottom_biopsy)
+plot_3 <- SpatialFeaturePlot(`H14-11604`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-11604 (aTCMR1B); B")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-11604`)
+
+#---------# Overview plots #---------#
+to_save <- wrap_plots(SpatialFeaturePlot(BIO1_KH119_A, features = "nCount_Spatial") + 
+             theme(legend.position = "right") +
+             ggtitle("BIO1_KH119_A"),
+           plot_1, plot_2, plot_3)
+ggsave("03_BIO1_KH119_A_subsets.jpeg", plot = to_save,
+       width = 9, height = 8)
+
+## -------# BIO2_KH120_B ----
+# Obtain sample coordinates.
+coords_sample <- BIO2_KH120_B@images$slice1@coordinates
+# # Overview plot to use as coordinate guidance.
+# SpatialFeaturePlot(BIO2_KH120_B, features = "nCount_Spatial")
+
+#-----# H14-23350 (TOP) #-----# 
+vertical <- with(coords_sample,
+                  row > 20 & row < 100 & col < 70)
+top_biopsy <- rownames(coords_sample[vertical,])
+
+`H14-23350` <- subset(BIO2_KH120_B, cells = top_biopsy)
+plot_1 <- SpatialFeaturePlot(`H14-23350`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-23350 (IFTA); T")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-23350`)
+
+#-----# H16-9676 (MIDDLE) #-----# 
+vertical <- with(coords_sample,
+                 col > 50 & col < 147)
+middle_biopsy <- rownames(coords_sample[vertical,])
+
+`H16-9676` <- subset(BIO2_KH120_B, cells = middle_biopsy)
+plot_2 <- SpatialFeaturePlot(`H16-9676`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H16-9676 (IFTA); M")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H16-9676`)
+
+#-----# H14-20579 (BOTTOM) #-----# 
+bottom <- with(coords_sample,
+                       row > 10 & col > 147)
+remove_section <- with(coords_sample,
+                       (col > 175 & row > 50) | (col > 170 & row > 60))
+
+bottom_biopsy <- rownames(coords_sample[bottom & !remove_section,])
+
+`H14-20579` <- subset(BIO2_KH120_B, cells = bottom_biopsy)
+plot_3 <- SpatialFeaturePlot(`H14-20579`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-20579 (aAMR C4d+); B")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-20579`)
+
+#-----# Overview plots #-----# 
+to_save <- wrap_plots(SpatialFeaturePlot(BIO2_KH120_B, features = "nCount_Spatial") + 
+             theme(legend.position = "right") +
+             ggtitle("BIO2_KH120_B"),
+           plot_1, plot_2, plot_3)
+ggsave("04_BIO2_KH120_B_subsets.jpeg", plot = to_save,
+       width = 9, height = 8)
+## -------# BIO3_KH121_A ----
+# Obtain sample coordinates.
+coords_sample <- BIO3_KH121_A@images$slice1@coordinates
+# # Overview plot to use as coordinate guidance.
+# SpatialFeaturePlot(BIO3_KH121_A, features = "nCount_Spatial")
+
+#-----# H14-6512 (TOP) #-----# 
+top <- with(coords_sample,
+                 col < 123)
+# Remove overlapping biopsies and artifacts.
+remove_section <- with(coords_sample,
+                       (row < 40 & col > 115) | (row < 10 & col < 10) | (row > 110 & col < 10))
+top_biopsy <- rownames(coords_sample[top & !remove_section,])
+
+`H14-6512` <- subset(BIO3_KH121_A, cells = top_biopsy)
+plot_1 <- SpatialFeaturePlot(`H14-6512`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-6512 (IFTA); T")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-6512`)
+
+#-----# H15-7659 (BOTTOM) #-----# 
+bottom <- with(coords_sample,
+               col > 116)
+# Remove overlapping biopsies and artifacts.
+remove_section <- with(coords_sample,
+                       (col < 140 & row > 65) | (row < 10 & col > 200) | (row > 110 & col > 213))
+bottom_biopsy <- rownames(coords_sample[bottom &!remove_section,])
+
+`H15-7659` <- subset(BIO3_KH121_A, cells = bottom_biopsy)
+plot_2 <- SpatialFeaturePlot(`H15-7659`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H15-7659 (HLAi); B")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H15-7659`)
+
+#-----# Overview plots #-----# 
+to_save <- wrap_plots(SpatialFeaturePlot(BIO3_KH121_A, features = "nCount_Spatial") + 
+             theme(legend.position = "right") +
+             ggtitle("BIO3_KH121_A"),
+           plot_1, plot_2)
+ggsave("05_BIO3_KH121_A_subsets.jpeg", plot = to_save,
+       width = 9, height = 2.5)
+## -------# BIO4_KH122_B ----
+# Obtain sample coordinates.
+coords_sample <- BIO4_KH122_B@images$slice1@coordinates
+# # Overview plot to use as coordinate guidance.
+# SpatialFeaturePlot(BIO4_KH122_B, features = "nCount_Spatial", crop = F)
+
+#-----# H14-6222 (TOP) #-----# 
+top <- with(coords_sample,
+                 row > 40 & col < 130)
+top_biopsy <- rownames(coords_sample[top,])
+
+`H14-6222` <- subset(BIO4_KH122_B, cells = top_biopsy)
+plot_1 <- SpatialFeaturePlot(`H14-6222`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-6222 (HLAi); T")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-6222`)
+
+#-----# H16-9416 (MIDDLE) #-----# 
+middle <- with(coords_sample,
+               row < 42 & col < 145)
+middle_biopsy <- rownames(coords_sample[middle,])
+
+`H16-9416` <- subset(BIO4_KH122_B, cells = middle_biopsy)
+plot_2 <- SpatialFeaturePlot(`H16-9416`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H16-9416 (IFTA); M")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H16-9416`)
+
+#-----# H14-6925 (BOTTOM) #-----# 
+bottom <- with(coords_sample,
+               row > 42 & col > 130 & col < 195)
+bottom_biopsy <- rownames(coords_sample[bottom,])
+
+`H14-6925` <- subset(BIO4_KH122_B, cells = bottom_biopsy)
+plot_3 <- SpatialFeaturePlot(`H14-6925`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-6925 (aAMR C4d+); B")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-6925`)
+
+#-----# Overview plots #-----# 
+to_save <- wrap_plots(SpatialFeaturePlot(BIO4_KH122_B, features = "nCount_Spatial") + 
+             theme(legend.position = "right") +
+             ggtitle("BIO4_KH122_B"),
+           plot_1, plot_2, plot_3)
+ggsave("06_BIO4_KH122_B_subsets.jpeg", plot = to_save,
+       width = 9, height = 8)
+## -------# BIO5_KH123_A ----
+# Obtain sample coordinates.
+coords_sample <- BIO5_KH123_A@images$slice1@coordinates
+# # Overview plot to use as coordinate guidance.
+# SpatialFeaturePlot(BIO5_KH123_A, features = "nCount_Spatial", crop = F)
+
+#-----# H16-8593 (TOP) #-----# 
+top <- with(coords_sample,
+             col > 140 & col < 197)
+# Remove overlapping biopsies and artifacts.
+remove_section <- with(coords_sample,
+                       col > 190 & row < 10)
+top_biopsy <- rownames(coords_sample[top & !remove_section,])
+
+`H16-8593` <- subset(BIO5_KH123_A, cells = top_biopsy)
+plot_1 <- SpatialFeaturePlot(`H16-8593`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H16-8593 (IFTA); T")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H16-8593`)
+
+#-----# H18-2638 (MIDDLE) #-----# 
+middle <- with(coords_sample,
+               col > 60 & col < 140)
+middle_biopsy <- rownames(coords_sample[middle,])
+
+`H18-2638` <- subset(BIO5_KH123_A, cells = middle_biopsy)
+plot_2 <- SpatialFeaturePlot(`H18-2638`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H18-2638 (HLAi); M")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H18-2638`)
+
+#-----# H13-22010 (BOTTOM) #-----# 
+bottom <- with(coords_sample,
+               col < 60)
+bottom_biopsy <- rownames(coords_sample[bottom,])
+
+`H13-22010` <- subset(BIO5_KH123_A, cells = bottom_biopsy)
+plot_3 <- SpatialFeaturePlot(`H13-22010`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H13-22010  (aTCMR1B); B")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H13-22010`)
+
+#-----# Overview plots #-----# 
+to_save <- wrap_plots(SpatialFeaturePlot(BIO5_KH123_A, features = "nCount_Spatial") + 
+             theme(legend.position = "right") +
+             ggtitle("BIO5_KH123_A"),
+           plot_1, plot_2, plot_3)
+ggsave("07_BIO5_KH123_A_subsets.jpeg", plot = to_save,
+       width = 9, height = 8)
+## -------# BIO6_KH124_B ----
+# Obtain sample coordinates.
+coords_sample <- BIO6_KH124_B@images$slice1@coordinates
+# # Overview plot to use as coordinate guidance.
+# SpatialFeaturePlot(BIO6_KH124_B, features = "nCount_Spatial", crop = F)
+
+#-----# H16-13550 (TOP) #-----# 
+top <- with(coords_sample,
+            col > 160 & col < 210)
+remove_section <- with(coords_sample,
+                       row < 25 & col > 180)
+top_biopsy <- rownames(coords_sample[top & !remove_section,])
+
+`H16-13550` <- subset(BIO6_KH124_B, cells = top_biopsy)
+plot_1 <- SpatialFeaturePlot(`H16-13550`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H16-13550 (IFTA); T")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H16-13550`)
+
+#-----# H16-5999 (MIDDLE) #-----# 
+middle <- with(coords_sample,
+               col > 90 & col < 160)
+middle_biopsy <- rownames(coords_sample[middle,])
+
+`H16-5999` <- subset(BIO6_KH124_B, cells = middle_biopsy)
+plot_2 <- SpatialFeaturePlot(`H16-5999`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H16-5999 (IFTA); M")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H16-5999`)
+
+#-----# H14-11792 (BOTTOM) #-----# 
+bottom <- with(coords_sample,
+               col < 90 & row > 35)
+bottom_biopsy <- rownames(coords_sample[bottom,])
+
+`H14-11792` <- subset(BIO6_KH124_B, cells = bottom_biopsy)
+plot_3 <- SpatialFeaturePlot(`H14-11792`, features = "nCount_Spatial", crop = F) +
+  theme(legend.position = "right") + ggtitle("H14-11792 (aTCMR2B); B")
+
+# Add sample to list.
+sample_list <- append(sample_list, `H14-11792`)
+
+#-----# Overview plots #-----# 
+to_save <- wrap_plots(SpatialFeaturePlot(BIO6_KH124_B, features = "nCount_Spatial") + 
+             theme(legend.position = "right") +
+             ggtitle("BIO6_KH124_B"),
+           plot_1, plot_2, plot_3)
+ggsave("08_BIO6_KH124_B_subsets.jpeg", plot = to_save,
+       width = 9, height = 8)
+
+print("!!! STEP 3 FINISHED. !!!")
+
+# STEP 4: Add sample information [adjust for additional samples]. ----
+# Add sample names to Seurat objects in sample_list.
+names(sample_list) <- c("H14-5147", "H16-8962", "H14-11604",
+                       "H14-23350", "H16-9676", "H14-20579",
+                       "H14-6512", "H15-7659",
+                       "H14-6222", "H16-9416", "H14-6925",
+                       "H16-8593", "H18-2638", "H13-22010",
+                       "H16-13550", "H16-5999", "H14-11792")
+# Remove the samples from environment.
+rm(`H14-5147`, `H16-8962`, `H14-11604`,
+   `H14-23350`, `H16-9676`, `H14-20579`,
+   `H14-6512`, `H15-7659`,
+   `H14-6222`, `H16-9416`, `H14-6925`,
+   `H16-8593`, `H18-2638`, `H13-22010`,
+   `H16-13550`, `H16-5999`, `H14-11792`)
+
+
+# Add metadata to the samples.
+i <- 1
+for(sample in sample_list){
+  # Add sample names.
+  sample$orig.ident <- names(sample_list[i])
+  # Add Diagnosis.
+  sample$diag <- info_samples.xlsx$Diagnosis[info_samples.xlsx$PA_number == names(sample_list[i])]
+  # Add Gender.
+  sample$gender <- info_samples.xlsx$Gender[info_samples.xlsx$PA_number == names(sample_list[i])]
+  # Add the sample back into list.
+  sample_list[[i]] <- sample
+  i <- i + 1
+}
+
+# Save sample list with metadata.
+saveRDS(sample_list, "Visium_samples_metadata_raw.RDS")
+
+## Load data.----
+sample_list <- readRDS("E:/MSc_EMC_project/Main_project/01_QC_outs/Visium_samples_metadata_raw.RDS")
+
+# Merge into one Seurat object.
+combined_samples <- merge(sample_list[[1]], sample_list[-1])
+combined_samples <- JoinLayers(combined_samples)
+
+# Find mitochondrial genes
+combined_samples[['percent.mt']] <- PercentageFeatureSet(combined_samples, pattern = '^MT-')
+
+print("!!! DATA LOADED !!!")
+
+## QC plots after combining. ----
+plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial", 
+            group.by = "orig.ident", pt.size = 0) + NoLegend()
+ggsave(filename ="09_nCount_per_sample.jpeg",  plot = plot_1,
+       width = 10 , height = 10)
+
+plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial", 
+                  group.by = "orig.ident", pt.size = 0) + NoLegend()
+ggsave(filename = "10_nFeature_per_sample.jpeg", plot = plot_2,
+       width = 10, height = 10)
+
+# Find mitochondrial genes.
+plot_3 <- VlnPlot(combined_samples, features = "percent.mt",
+                 group.by = "orig.ident", pt.size = 0) + NoLegend()
+ggsave(filename ="11_percent_MT_per_sample.jpeg", plot = plot_3,
+       width = 10 , height = 10)
+
+to_save <- wrap_plots(plot_1, plot_2, plot_3, ncol = 1)
+ggsave(filename = "12_QC_overview_per_sample.jpeg", plot = to_save,
+       width = 10 , height = 20)
+to_save <- wrap_plots(plot_1, plot_2, plot_3, ncol = 3)
+ggsave(filename = "12.5_QC_overview_per_sample.jpeg", plot = to_save,
+       width = 30, height = 10)
+
+## QC plots without HLAi
+no_HLAi <- c("H16-8962", "H14-11604", "H14-23350", 
+             "H16-9676", "H14-20579", "H14-6512", 
+             "H16-9416", "H14-6925", "H16-8593", 
+             "H13-22010", "H16-13550", "H16-5999", "H14-11792")
+
+Idents(combined_samples) <- 'orig.ident'
+plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial", 
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+ggsave(filename ="09.5_nCount_per_sample_noHLAi.jpeg",  plot = plot_1,
+       width = 10 , height = 10)
+
+plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial", 
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+ggsave(filename = "10.5_nFeature_per_sample_noHLAi.jpeg", plot = plot_2,
+       width = 10, height = 10)
+
+plot_3 <- VlnPlot(combined_samples, features = "percent.mt", 
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+ggsave(filename ="11.5_percent_MT_per_sample_noHLAi.jpeg", plot = plot_3,
+       width = 10 , height = 10)
+
+to_save <- wrap_plots(plot_1, plot_2, plot_3, ncol = 1)
+ggsave(filename = "12.5_QC_overview_per_sample_noHLAi.jpeg", plot = to_save,
+       width = 10 , height = 20)
+to_save <- wrap_plots(plot_1, plot_2, plot_3, ncol = 3)
+ggsave(filename = "12.5_QC_overview_per_sample_noHLAi.jpeg", plot = to_save,
+       width = 30, height = 10)
+
+print("!!! STEP 4 FINISHED. !!!")
+
+
+# (redundant?) STEP 5: QC plots visualizing removed samples for analysis.----
+
+# # Collect sample names
+# colour_per_sample <- unique(combined_samples$orig.ident)
+# sample_colours <- gg_color_hue(length(sample_list))
+# 
+# names(sample_colours) <- colour_per_sample
+# 
+# # Make samples to be removed grey.
+# sample_colours[c("H14-6222", "H14-6512", "H14-6925", "H15-7659", "H16-9416")] <- "grey"
+# 
+# combined_samples$orig.ident <- factor(combined_samples$orig.ident,
+#                                       levels = unique(combined_samples$orig.ident))
+# 
+# plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial",
+#                  group.by = "orig.ident", pt.size = 0, cols = sample_colours) + NoLegend()
+# ggsave(plot_1, filename = paste0("13.1_nCount_per_sample_excluded_in_grey.jpeg"), width = 10 , height = 7)
+# # ggsave(filename = paste0("13.1nCount per sample_excluded in grey.svg"),
+# #        width = 10 , height = 7)
+# 
+# plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial",
+#                   group.by = "orig.ident", pt.size = 0, cols = sample_colours) + NoLegend()
+# ggsave(plot_2, filename = paste0("13.2_nFeature_per_sample_excluded_in_grey.jpeg"), width = 10 , height = 7)
+# # ggsave(filename = paste0("13.2_nFeature_per_sample_excluded_in_grey.svg"),
+# #        width = 10 , height = 7)
+# 
+# plot_3 <- VlnPlot(combined_samples, features = "percent.mt", 
+#                   group.by = "orig.ident", pt.size = 0, cols = sample_colours) + NoLegend()
+# ggsave(plot_3, filename = paste0("13.3_percent.mt per sample_excluded in grey.jpeg"), width = 10 , height = 7)
+# # ggsave(filename = paste0("13.3_percent.mt per sample_excluded in grey.svg"),
+# #        width = 10 , height = 7)
+# 
+# wrap_plots(plot_1, plot_2, plot_3, ncol = 1)
+# ggsave(filename = paste0("13.4_QC_overview_per_sample_vlns_excluded_in_grey.jpeg"),
+#        width = 10 , height = 20)
+# # ggsave(filename = paste0("13.4_QC_overview_per_sample_vlns_excluded_in_grey.svg"), width=10 , height = 20)
+# 
+# print("!!! STEP 5 FINISHED !!!")
+
+
+# STEP 6: PCA of pseudobulks/sample ----
+## 6.1. PCA - ALL Samples ----
+# Remove HLAi
+Idents(combined_samples) <- "orig.ident"
+combined_samples <- subset(combined_samples, idents = no_HLAi)
+
+
+# Get sample pseudobulks.
+avg_expression <- matrix(AggregateExpression(combined_samples,
+                                             group.by = "orig.ident"))
+
+# Remove genes with only 0s in all groups.
+avg_expression <- avg_expression[[1]]
+avg_expression <- avg_expression[rowSums(avg_expression[]) > 0,]
+
+# Create metadata.
+# Get all metadata where the individual sample has only one unique value.
+metadata <- FetchData(combined_samples, vars = colnames(combined_samples@meta.data))
+
+
+# Remove metadata with more values than sample number and reduce to a small metadata data frame.
+dataframe <- NULL
+
+for (sample in unique(metadata[,'orig.ident'])){
+  dataframe[[sample]] <- sapply(metadata[metadata[,'orig.ident'] == sample,], function(x) length(unique(x)) > 1)
+}
+
+metadata <- metadata[,rowSums(as.data.frame(dataframe)) == 0]
+metadata <- metadata %>% distinct()
+rownames(metadata) <- NULL
+
+# Add group_ID (diagnosis) for analysis.
+metadata$group_id <- metadata[,"diag"]
+# Create DEseq2 object.
+DESeq2_dataset <- DESeqDataSetFromMatrix(avg_expression,
+                                        colData = metadata,
+                                        design = ~ group_id)
+
+# STARTING PCA CODE
+# Transform counts for data visualization
+vsd <- DESeq2::vst(DESeq2_dataset, blind = TRUE)
+# Sort metadata according to the vsd order
+rownames(metadata) <- metadata[,"orig.ident"]
+metadata <- metadata[colnames(vsd),]
+
+# Remove batch effects 
+# http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#why-after-vst-are-there-still-batches-in-the-pca-plot
+mat <- assay(vsd)
+mm <- model.matrix(~group_id, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=metadata[,"gender"], design=mm)
+assay(vsd) <- mat
+
+# PCA
+# calculate the variance & select top 500 genes.
+top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
+# perform a PCA on the data in assay(x) for the selected genes
+pca <- prcomp(t(assay(vsd)[top500_genes,]))
+
+pca_plot <- autoplot(pca, data = metadata, colour = "diag",
+                     label = T, label.vjust = -1) +
+  ggtitle("PCA of all samples") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+ggsave(filename = paste0("pca/14.1_PCA_allsamples.jpeg"), plot = pca_plot,
+       width = 12, height = 8)
+
+### 6.1.1. Simple clustering ----
+# Normalize & Find features.
+combined_samples <- NormalizeData(combined_samples, normalization.method = 'LogNormalize', scale.factor = 10000, verbose = F)
+combined_samples <- FindVariableFeatures(combined_samples, selection.method = "vst", nfeatures = 2000, verbose = F)
+
+# Standard workflow for visualization and clustering.
+combined_samples <- ScaleData(combined_samples, verbose = F)
+combined_samples <- RunPCA(combined_samples, verbose = F)
+
+# UMAP & Clustering.
+combined_samples <- RunUMAP(combined_samples, reduction = "pca", dims = 1:30,repulsion.strength = 5, verbose = F)
+combined_samples <- FindNeighbors(combined_samples, reduction = "pca", dims = 1:30, verbose = F)
+combined_samples <- FindClusters(combined_samples, resolution = 0.1, verbose = F)
+
+# Plots
+to_save <- DimPlot(combined_samples, group.by = "orig.ident") +
+  ggtitle("Clustering of all samples")
+ggsave(filename = paste0("pca/14.2_umap_allsamples.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+to_save <- DimPlot(combined_samples, group.by = "diag") +
+  ggtitle("Clustering of all samples")
+ggsave(filename = paste0("pca/14.3_umap_allsamples_diag.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+
+## 6.2. PCA - "H14-6925" removed  & repeat steps ----
+
+# Sample to be removed: H14-6925
+Idents(combined_samples) <- "orig.ident"
+combined_samples <- subset(combined_samples, idents = "H14-6925", 
+                           invert = T)
+
+# Get sample pseudobulks.
+avg_expression <- matrix(AggregateExpression(combined_samples,
+                                             group.by = "orig.ident"))
+
+# Remove genes with only 0s in all groups.
+avg_expression <- avg_expression[[1]]
+avg_expression <- avg_expression[rowSums(avg_expression[]) > 0,]
+
+# Create metadata.
+# Get all metadata where the individual sample has only one unique value.
+metadata <- FetchData(combined_samples, vars = colnames(combined_samples@meta.data))
+
+
+# Remove metadata with more values than sample number and reduce to a small metadata data frame.
+dataframe <- NULL
+
+for (sample in unique(metadata[,'orig.ident'])){
+  dataframe[[sample]] <- sapply(metadata[metadata[,'orig.ident'] == sample,], function(x) length(unique(x)) > 1)
+}
+
+metadata <- metadata[,rowSums(as.data.frame(dataframe)) == 0]
+metadata <- metadata %>% distinct()
+rownames(metadata) <- NULL
+
+# Add group_ID (diagnosis) for analysis.
+metadata$group_id <- metadata[,"diag"]
+# Create DEseq2 object.
+DESeq2_dataset <- DESeqDataSetFromMatrix(avg_expression,
+                                         colData = metadata,
+                                         design = ~ group_id)
+
+# STARTING PCA CODE
+# Transform counts for data visualization
+vsd <- DESeq2::vst(DESeq2_dataset, blind = TRUE)
+# Sort metadata according to the vsd order
+rownames(metadata)<-metadata[,"orig.ident"]
+metadata<-metadata[colnames(vsd),]
+
+# Remove batch effects 
+# Source: http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#why-after-vst-are-there-still-batches-in-the-pca-plot
+mat <- assay(vsd)
+mm <- model.matrix(~group_id, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=metadata[,"gender"], design=mm)
+assay(vsd) <- mat
+
+# PCA
+# calculate the variance & select top 500 genes.
+top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
+# perform a PCA on the data in assay(x) for the selected genes
+pca <- prcomp(t(assay(vsd)[top500_genes,]))
+
+pca_plot <- autoplot(pca, data = metadata, colour = "diag",
+                     label = T, label.vjust = -1) +
+  ggtitle("PCA after removing sample H14-6925") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+ggsave(filename = paste0("pca/15.1_PCA_1sampleremoved.jpeg"), plot = pca_plot,
+       width = 12, height = 8)
+
+### 6.2.1. Simple clustering ----
+# Normalize & Find features.
+combined_samples <- NormalizeData(combined_samples, normalization.method = 'LogNormalize', scale.factor = 10000, verbose = FALSE)
+combined_samples <- FindVariableFeatures(combined_samples, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+
+# Standard workflow for visualization and clustering.
+combined_samples <- ScaleData(combined_samples, verbose = FALSE)
+combined_samples <- RunPCA(combined_samples, verbose = FALSE)
+
+# UMAP & Clustering.
+combined_samples <- RunUMAP(combined_samples, reduction = "pca", dims = 1:30,repulsion.strength = 5, verbose = FALSE)
+combined_samples <- FindNeighbors(combined_samples, reduction = "pca", dims = 1:30, verbose = FALSE)
+combined_samples <- FindClusters(combined_samples, resolution = 0.1, verbose = FALSE)
+
+# Plots
+to_save <- DimPlot(combined_samples, group.by = "orig.ident") +
+  ggtitle("Clustering after removing sample H14-6925")
+ggsave(filename = paste0("pca/15.2_umap_1sampleremoved.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+to_save <- DimPlot(combined_samples, group.by = "diag") +
+  ggtitle("Clustering after removing sample H14-6925")
+ggsave(filename = paste0("pca/15.3_umap_1sampleremoved_diag.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+
+
+
+
+
+## 6.3. PCA - "H16-9416" removed  & repeat steps ----
+# Sample to be removed: "H16-9416"
+Idents(combined_samples) <- "orig.ident"
+combined_samples <- subset(combined_samples, idents = "H16-9416", 
+                           invert = T)
+
+# Get sample pseudobulks.
+avg_expression <- matrix(AggregateExpression(combined_samples,
+                                             group.by = "orig.ident"))
+
+# Remove genes with only 0s in all groups.
+avg_expression <- avg_expression[[1]]
+avg_expression <- avg_expression[rowSums(avg_expression[]) > 0,]
+
+# Create metadata.
+# Get all metadata where the individual sample has only one unique value.
+metadata <- FetchData(combined_samples, vars = colnames(combined_samples@meta.data))
+
+
+# Remove metadata with more values than sample number and reduce to a small metadata data frame.
+dataframe <- NULL
+
+for (sample in unique(metadata[,'orig.ident'])){
+  dataframe[[sample]] <- sapply(metadata[metadata[,'orig.ident'] == sample,], function(x) length(unique(x)) > 1)
+}
+
+metadata <- metadata[,rowSums(as.data.frame(dataframe)) == 0]
+metadata <- metadata %>% distinct()
+rownames(metadata) <- NULL
+
+# Add group_ID (diagnosis) for analysis.
+metadata$group_id <- metadata[,"diag"]
+# Create DEseq2 object.
+DESeq2_dataset <- DESeqDataSetFromMatrix(avg_expression,
+                                         colData = metadata,
+                                         design = ~ group_id)
+
+# STARTING PCA CODE
+# Transform counts for data visualization
+vsd <- DESeq2::vst(DESeq2_dataset, blind = TRUE)
+# Sort metadata according to the vsd order
+rownames(metadata)<-metadata[,"orig.ident"]
+metadata<-metadata[colnames(vsd),]
+
+# Remove batch effects 
+# Source: http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#why-after-vst-are-there-still-batches-in-the-pca-plot
+mat <- assay(vsd)
+mm <- model.matrix(~group_id, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=metadata[,"gender"], design=mm)
+assay(vsd) <- mat
+
+# PCA
+# calculate the variance & select top 500 genes.
+top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
+# perform a PCA on the data in assay(x) for the selected genes
+pca <- prcomp(t(assay(vsd)[top500_genes,]))
+
+pca_plot <- autoplot(pca, data = metadata, colour = "diag",
+                     label = T, label.vjust = -1) +
+  ggtitle("PCA after removing samples H14-6925 and H16-9416") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+ggsave(filename = paste0("pca/16.1_PCA_pseudobulk_2samplesremoved.jpeg"), plot = pca_plot,
+       width = 12, height = 8)
+
+### 6.3.1. Simple clustering ----
+# Normalize & Find features.
+combined_samples <- NormalizeData(combined_samples, normalization.method = 'LogNormalize', scale.factor = 10000, verbose = FALSE)
+combined_samples <- FindVariableFeatures(combined_samples, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+
+# Standard workflow for visualization and clustering.
+combined_samples <- ScaleData(combined_samples, verbose = FALSE)
+combined_samples <- RunPCA(combined_samples, verbose = FALSE)
+
+# UMAP & Clustering.
+combined_samples <- RunUMAP(combined_samples, reduction = "pca", dims = 1:30,repulsion.strength = 5, verbose = FALSE)
+combined_samples <- FindNeighbors(combined_samples, reduction = "pca", dims = 1:30, verbose = FALSE)
+combined_samples <- FindClusters(combined_samples, resolution = 0.1, verbose = FALSE)
+
+# Plots
+to_save <- DimPlot(combined_samples, group.by = "orig.ident") +
+  ggtitle("Clustering after removing samples H14-6925 and H16-9416")
+ggsave(filename = paste0("pca/16.2_umap_2samplesremoved.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+to_save <- DimPlot(combined_samples, group.by = "diag") +
+  ggtitle("Clustering after removing samples H14-6925 and H16-9416")
+ggsave(filename = paste0("pca/16.3_umap_2samplesremoved_diag.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+
+
+
+
+
+
+
+
+
+# STEP 7: Reload data. ----
+# Load raw data.
+sample_list <- readRDS("E:/MSc_EMC_project/Main_project/01_QC_outs/Visium_samples_metadata_raw.RDS")
+
+# Merge into one Seurat object.
+combined_samples <- merge(sample_list[[1]], sample_list[-1])
+combined_samples <- JoinLayers(combined_samples)
+
+# Find mitochondrial genes
+combined_samples[['percent.mt']] <- PercentageFeatureSet(combined_samples, pattern = '^MT-')
+
+
+print("!!! DATA LOADED & STEP 7 FINISHED. !!!")
+
+# STEP 8: Label low QC counts & remove bad sample(s) for further analysis. ----
+
+# If nFeature_Spatial < 300: Low_nFeature, else: pass
+combined_samples[['lowFeature']] <- ifelse(combined_samples$nFeature_Spatial < 300, "Low_nFeature", "pass")
+# If nCount_Spatial < 500: lowUMI, else: pass
+combined_samples[['lowUMI']] <- ifelse(combined_samples$nCount_Spatial < 500, "Low_UMI", "pass")
+
+# QC plots
+plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial",
+                 group.by = "orig.ident", split.by = "lowUMI", pt.size = 0.5)
+plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial",
+                 group.by = "orig.ident", split.by = "lowFeature", pt.size = 0.5)
+
+to_save <- wrap_plots(plot_1, plot_2, ncol = 1)
+ggsave(filename = paste0("19_Filtered_by_below300_genes_or_below500_UMI.jpeg"), plot = to_save,
+       width = 10 , height = 13)
+
+# Create a copy (filtered_combined_samples) and remove non-pass spots
+filtered_combined_samples <- NULL
+filtered_combined_samples <- combined_samples
+
+# Remove unwanted/bad samples.
+Idents(filtered_combined_samples) <- "orig.ident"
+filtered_combined_samples <- subset(filtered_combined_samples, idents = "H16-9416",
+                                    invert = T)
+# Remove HLAi from analysis.
+Idents(filtered_combined_samples) <- "orig.ident"
+filtered_combined_samples <- subset(filtered_combined_samples, idents = c("H14-5147", "H18-2638"),
+                                    invert = T)
+
+# Add lowUMI and lowFeature identities, and add passing features
+Idents(filtered_combined_samples) <- "lowUMI"
+filtered_combined_samples <- subset(filtered_combined_samples, idents = "pass")
+# subset(filtered_combined_samples, idents = "pass")
+
+Idents(filtered_combined_samples) <- "lowFeature"
+filtered_combined_samples <- subset(filtered_combined_samples, idents = "pass")
+
+
+# Obtain which samples are removed after filtering
+removed_samples <- setdiff(unique(combined_samples$orig.ident), unique(filtered_combined_samples$orig.ident))
+
+# Create sample_index list and obtain indexes
+sample_index <- list()
+for(sample_no in 1:length(removed_samples)){
+  # print(which(as.vector(unique(combined_samples$orig.ident)) == as.vector(removed_samples)[sample_no]))
+  sample_index <- append(sample_index, which(as.vector(unique(combined_samples$orig.ident)) == as.vector(removed_samples)[sample_no]))
+}
+
+# Removed unused slice numbers.
+filtered_combined_samples@images$slice1 <- NULL
+for(index in sample_index[2:7]){
+  image_name <- paste0("slice1.", index)
+  filtered_combined_samples@images[image_name] <- NULL
+}
+
+# Rename slice names to sample names
+# Original object
+names(combined_samples@images) <- unique(combined_samples$orig.ident)
+# Filtered object
+names(filtered_combined_samples@images) <- unique(filtered_combined_samples$orig.ident)
+
+
+## 8.1. Save filtered data.----
+# Original object
+saveRDS(combined_samples, "Visium_samples_combined_QC_0removed.RDS")
+
+# Filtered object
+saveRDS(filtered_combined_samples, "Visium_samples_filtered_combined_QC_5removed.RDS")
+
+print("!!! STEP 8 FINISHED. !!!")
+
+
+# STEP 9: PCA of filtered data ----
+# Load filtered data
+filtered_combined_samples <- readRDS("Visium_samples_filtered_combined_QC_5removed.RDS")
+
+# Get sample pseudobulks.
+avg_expression <- matrix(AggregateExpression(filtered_combined_samples,
+                                             group.by = "orig.ident"))
+
+# Remove genes with only 0s in all groups.
+avg_expression <- avg_expression[[1]]
+avg_expression <- avg_expression[rowSums(avg_expression[]) > 0,]
+
+# Create metadata.
+# Get all metadata where the individual sample has only one unique value.
+metadata <- FetchData(filtered_combined_samples, vars = colnames(filtered_combined_samples@meta.data))
+
+# Remove metadata with more values than sample number and reduce to a small metadata data frame.
+dataframe <- NULL
+for (sample in unique(metadata[,'orig.ident'])){
+  dataframe[[sample]] <- sapply(metadata[metadata[,'orig.ident'] == sample,], function(x) length(unique(x)) > 1)
+}
+
+metadata <- metadata[,rowSums(as.data.frame(dataframe)) == 0]
+metadata <- metadata %>% distinct()
+rownames(metadata) <- NULL
+
+# Add group_ID (diagnosis) for analysis.
+metadata$group_id <- metadata[,"diag"]
+# Create DEseq2 object.
+DESeq2_dataset <- DESeqDataSetFromMatrix(avg_expression,
+                                         colData = metadata,
+                                         design = ~ group_id)
+
+# STARTING PCA CODE.
+# Transform counts for data visualization.
+vsd <- DESeq2::vst(DESeq2_dataset, blind = TRUE)
+# Sort metadata according to the vsd order
+rownames(metadata)<-metadata[,"orig.ident"]
+metadata<-metadata[colnames(vsd),]
+
+# Remove batch effects 
+# http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#why-after-vst-are-there-still-batches-in-the-pca-plot
+mat <- assay(vsd)
+mm <- model.matrix(~group_id, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=metadata[,"gender"], design=mm)
+assay(vsd) <- mat
+
+# PCA
+# Calculate the variance & select top 500 genes.
+top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
+
+# Perform a PCA on the data in assay(x) for the selected genes.
+pca <- prcomp(t(assay(vsd)[top500_genes,]))
+pca_plot <- autoplot(pca, data = metadata, colour = "diag",
+                     label = T, label.vjust = -1) +
+  ggtitle("PCA of filtered data") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+# pca_plot <- autoplot(pca, data = metadata, colour = "diag",
+#                      label = T, label.vjust = -1) +
+#   ggtitle("PCA of filtered data",
+#           subtitle = paste0(removed_samples[1], ", ", removed_samples[2], ", ",
+#                             removed_samples[3], ", ", removed_samples[4], ",",
+#                             removed_samples[5], ", ", removed_samples[6], ",", removed_samples[7], " removed")) +
+#   guides(colour = guide_legend(override.aes = aes(label = "")))
+
+ggsave(filename = paste0("pca/20.2_PCA_pseudobulk_QC_filtered_combined_samples.jpeg"), plot = pca_plot,
+       width = 12, height = 8)
+
+## 9.1. Clustering of filtered data ----
+# Normalize & Find features.
+filtered_combined_samples <- NormalizeData(filtered_combined_samples, normalization.method = 'LogNormalize', scale.factor = 10000, verbose = FALSE)
+filtered_combined_samples <- FindVariableFeatures(filtered_combined_samples, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+
+# Standard workflow for visualization and clustering.
+filtered_combined_samples <- ScaleData(filtered_combined_samples, verbose = FALSE)
+filtered_combined_samples <- RunPCA(filtered_combined_samples, verbose = FALSE)
+
+# UMAP & Clustering.
+filtered_combined_samples <- RunUMAP(filtered_combined_samples, reduction = "pca", dims = 1:30, repulsion.strength = 5, verbose = FALSE)
+filtered_combined_samples <- FindNeighbors(filtered_combined_samples, reduction = "pca", dims = 1:30, verbose = FALSE)
+filtered_combined_samples <- FindClusters(filtered_combined_samples, resolution = 0.1, verbose = FALSE)
+
+# Plots
+to_save <- DimPlot(filtered_combined_samples, group.by = "orig.ident")+
+  ggtitle("Clustering of filtered data",
+          subtitle = paste0(removed_samples[1], ", ", removed_samples[2], ", ",
+                            removed_samples[3], ", ", removed_samples[4], ", (low UMI/nFeature) removed")) +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+ggsave(filename = paste0("pca/20.2_simple_clustering_filtered_combined_samples.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+to_save <- DimPlot(filtered_combined_samples, group.by = "diag")+
+  ggtitle("Clustering of filtered data",
+          subtitle = paste0(removed_samples[1], ", ", removed_samples[2], ", ",
+                            removed_samples[3], ", ", removed_samples[4], ", (low UMI/nFeature) removed")) +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+ggsave(filename = paste0("pca/20.3_simple_clustering_filtered_combined_samples.jpeg"), plot = to_save,
+       width = 8 , height = 8)
+
+
+print("!!! STEP 9 FINISHED. !!!")
+
+
+
+
+
+
+
+
+
+# Thesis figures ----
+## QC Figure 1 ----
+### A ----
+sample_list <- readRDS("E:/MSc_EMC_project/Main_project/01_QC_outs/Visium_samples_metadata_raw.RDS")
+
+# Merge into one Seurat object.
+combined_samples <- merge(sample_list[[1]], sample_list[-1])
+combined_samples <- JoinLayers(combined_samples)
+
+# Find mitochondrial genes
+combined_samples[['percent.mt']] <- PercentageFeatureSet(combined_samples, pattern = '^MT-')
+# VLN plots
+# QC plots without HLAi
+no_HLAi <- c("H16-8962", "H14-11604", "H14-23350", 
+             "H16-9676", "H14-20579", "H14-6512", 
+             "H16-9416", "H14-6925", "H16-8593", 
+             "H13-22010", "H16-13550", "H16-5999", "H14-11792")
+
+Idents(combined_samples) <- 'orig.ident'
+plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial", 
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+ggsave(filename ="09.5_nCount_per_sample_noHLAi.jpeg",  plot = plot_1,
+       width = 10 , height = 10)
+
+plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial", 
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+ggsave(filename = "10.5_nFeature_per_sample_noHLAi.jpeg", plot = plot_2,
+       width = 10, height = 10)
+
+plot_3 <- VlnPlot(combined_samples, features = "percent.mt", 
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+
+Fig_QC_A <- wrap_plots(plot_1, plot_2, plot_3, ncol = 1)
+### B ----
+Idents(combined_samples) <- "orig.ident"
+combined_samples <- subset(combined_samples, idents = no_HLAi)
+
+
+# Get sample pseudobulks.
+avg_expression <- matrix(AggregateExpression(combined_samples,
+                                             group.by = "orig.ident"))
+
+# Remove genes with only 0s in all groups.
+avg_expression <- avg_expression[[1]]
+avg_expression <- avg_expression[rowSums(avg_expression[]) > 0,]
+
+# Create metadata.
+# Get all metadata where the individual sample has only one unique value.
+metadata <- FetchData(combined_samples, vars = colnames(combined_samples@meta.data))
+
+
+# Remove metadata with more values than sample number and reduce to a small metadata data frame.
+dataframe <- NULL
+
+for (sample in unique(metadata[,'orig.ident'])){
+  dataframe[[sample]] <- sapply(metadata[metadata[,'orig.ident'] == sample,], function(x) length(unique(x)) > 1)
+}
+
+metadata <- metadata[,rowSums(as.data.frame(dataframe)) == 0]
+metadata <- metadata %>% distinct()
+rownames(metadata) <- NULL
+
+# Add group_ID (diagnosis) for analysis.
+metadata$group_id <- metadata[,"diag"]
+# Create DEseq2 object.
+DESeq2_dataset <- DESeqDataSetFromMatrix(avg_expression,
+                                         colData = metadata,
+                                         design = ~ group_id)
+
+# STARTING PCA CODE
+# Transform counts for data visualization
+vsd <- DESeq2::vst(DESeq2_dataset, blind = TRUE)
+# Sort metadata according to the vsd order
+rownames(metadata) <- metadata[,"orig.ident"]
+metadata <- metadata[colnames(vsd),]
+
+# Remove batch effects 
+# http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#why-after-vst-are-there-still-batches-in-the-pca-plot
+mat <- assay(vsd)
+mm <- model.matrix(~group_id, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=metadata[,"gender"], design=mm)
+assay(vsd) <- mat
+
+# PCA
+# calculate the variance & select top 500 genes.
+top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
+# perform a PCA on the data in assay(x) for the selected genes
+pca <- prcomp(t(assay(vsd)[top500_genes,]))
+
+Fig_QC_B <- autoplot(pca, data = metadata, colour = "diag",
+                     label = T, label.vjust = -1) +
+  ggtitle("PCA of all samples") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+
+
+### C ----
+# Load raw data.
+sample_list <- readRDS("E:/MSc_EMC_project/Main_project/01_QC_outs/Visium_samples_metadata_raw.RDS")
+
+# Merge into one Seurat object.
+combined_samples <- merge(sample_list[[1]], sample_list[-1])
+combined_samples <- JoinLayers(combined_samples)
+
+# Find mitochondrial genes
+combined_samples[['percent.mt']] <- PercentageFeatureSet(combined_samples, pattern = '^MT-')
+
+# If nFeature_Spatial < 300: Low_nFeature, else: pass
+combined_samples[['lowFeature']] <- ifelse(combined_samples$nFeature_Spatial < 300, "Low_nFeature", "pass")
+# If nCount_Spatial < 500: lowUMI, else: pass
+combined_samples[['lowUMI']] <- ifelse(combined_samples$nCount_Spatial < 500, "Low_UMI", "pass")
+
+Idents(combined_samples) <- 'orig.ident'
+combined_samples <- subset(combined_samples, idents = no_HLAi)
+
+# QC plots
+plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial",
+                  group.by = "orig.ident", split.by = "lowUMI", pt.size = 0.5)
+plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial",
+                  group.by = "orig.ident", split.by = "lowFeature", pt.size = 0.5)
+
+Fig_QC_C <- wrap_plots(plot_1, plot_2, ncol = 1)
+### D ----
+filtered_combined_samples <- readRDS("Visium_samples_filtered_combined_QC_5removed.RDS")
+
+# Get sample pseudobulks.
+avg_expression <- matrix(AggregateExpression(filtered_combined_samples,
+                                             group.by = "orig.ident"))
+
+# Remove genes with only 0s in all groups.
+avg_expression <- avg_expression[[1]]
+avg_expression <- avg_expression[rowSums(avg_expression[]) > 0,]
+
+# Create metadata.
+# Get all metadata where the individual sample has only one unique value.
+metadata <- FetchData(filtered_combined_samples, vars = colnames(filtered_combined_samples@meta.data))
+
+# Remove metadata with more values than sample number and reduce to a small metadata data frame.
+dataframe <- NULL
+for (sample in unique(metadata[,'orig.ident'])){
+  dataframe[[sample]] <- sapply(metadata[metadata[,'orig.ident'] == sample,], function(x) length(unique(x)) > 1)
+}
+
+metadata <- metadata[,rowSums(as.data.frame(dataframe)) == 0]
+metadata <- metadata %>% distinct()
+rownames(metadata) <- NULL
+
+# Add group_ID (diagnosis) for analysis.
+metadata$group_id <- metadata[,"diag"]
+# Create DEseq2 object.
+DESeq2_dataset <- DESeqDataSetFromMatrix(avg_expression,
+                                         colData = metadata,
+                                         design = ~ group_id)
+
+# STARTING PCA CODE.
+# Transform counts for data visualization.
+vsd <- DESeq2::vst(DESeq2_dataset, blind = TRUE)
+# Sort metadata according to the vsd order
+rownames(metadata)<-metadata[,"orig.ident"]
+metadata<-metadata[colnames(vsd),]
+
+# Remove batch effects 
+# http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#why-after-vst-are-there-still-batches-in-the-pca-plot
+mat <- assay(vsd)
+mm <- model.matrix(~group_id, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=metadata[,"gender"], design=mm)
+assay(vsd) <- mat
+
+# PCA
+# Calculate the variance & select top 500 genes.
+top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
+
+# Perform a PCA on the data in assay(x) for the selected genes.
+pca <- prcomp(t(assay(vsd)[top500_genes,]))
+Fig_QC_D <- autoplot(pca, data = metadata, colour = "diag",
+                     label = T, label.vjust = -1) +
+  ggtitle("PCA of filtered data") +
+  guides(colour = guide_legend(override.aes = aes(label = "")))
+## arrange----
+# Fig_QC <- ggarrange(ggarrange(Fig_QC_A, Fig_QC_B, ncol = 2, labels = c("A", "B")),
+#                     ggarrange(Fig_QC_C, labels = "C"), nrow = 2)
+Fig_QC <- ggarrange(Fig_QC_A, Fig_QC_B, Fig_QC_C, Fig_QC_D,
+                    labels = c("A", "B", "C", "D"),
+                    font.label = list(size = 20))
+ggsave(plot = Fig_QC, filename = "Thesis_Fig_1.jpeg",
+       height = 17, width = 20)
