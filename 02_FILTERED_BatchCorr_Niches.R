@@ -350,10 +350,10 @@ plot <- DotPlot(filtered_combined_samples, features = top3_gene_clusters$gene,
         group.by = 'seurat_clusters') + labs(title = paste0("Top 3 genes per cluster")) +
   theme(axis.title.x = element_blank(),
         axis.title.y = element_blank(),
-        axis.text.x = element_text(size = 10, angle = 45, hjust = 1, color = "black"),
-        axis.text.y = element_text(size = 10, color = "black"),
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 8)) +
+        axis.text.x = element_text(size = 15, angle = 45, hjust = 1, color = "black"),
+        axis.text.y = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 10)) +
   scale_colour_gradient2(
     low = "darkblue",
     mid = "whitesmoke",
@@ -384,9 +384,9 @@ plot <- DotPlot(filtered_combined_samples, features = top10_gene_clusters$gene,
   theme(axis.title.x = element_blank(),
         axis.title.y = element_blank(),
         axis.text.x = element_text(size = 10, angle = 45, hjust = 1, color = "black"),
-        axis.text.y = element_text(size = 10, color = "black"),
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 8)) +
+        axis.text.y = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 10)) +
   scale_colour_gradient2(
     low = "darkblue",
     mid = "whitesmoke",
@@ -472,7 +472,7 @@ for(sample in names(filtered_combined_samples@images)){
   
   d <- p$diag[which(p$orig.ident == sample)]
   
-  plot_list[[x]] <- SpatialDimPlot(filtered_combined_samples, group.by = "seurat_clusters", label = TRUE,
+  plot_list[[x]] <- SpatialDimPlot(filtered_combined_samples, group.by = "seurat_clusters", label = TRUE, repel = T,
                                    images = sample, crop = F, pt.size.factor =  1.6, label.size = 4) + 
     NoLegend() + labs(title = paste0(sample, " (", d, ")"))
   
@@ -701,9 +701,9 @@ gt(annotation_table) |>
   gtsave("test.png")
 
 dotplot_fig <- ggarrange(
-  ggarrange(top3_dotplot, ggdraw() + draw_image("test.png"), labels = c("A", "B"), widths = c(3,1),
+  ggarrange(top3_dotplot, ggdraw() + draw_image("test.png"), labels = c("A", "C"), widths = c(3,1),
             font.label = list(size = 20)),
-  top10_dotplot, nrow = 2, labels = c("", "C"),
+  top10_dotplot, nrow = 2, labels = c("", "B"),
   font.label = list(size = 20))
 
 ggsave(plot = dotplot_fig, filename = "Thesis_Fig3_dotplots_annotation.jpeg",
