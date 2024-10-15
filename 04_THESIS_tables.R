@@ -91,22 +91,3 @@ gt(SR_table) |> tab_spanner(label = "Visium sample number", columns = c(2:7)) |>
   tab_options(table.font.names = "Cambria", table.font.size = 12) |>
   gt::gtsave(filename = "Table2_SR_output.png")
 
-# Table Figure 3 - dotplot ----
-cluster_no <- c(as.character(0:10))
-annotation <- c("loop of Henle",
-                "Proximal tubules",
-                "Distal tubules",
-                "???",
-                "Transmembrane transporter, ???",
-                "Mitochondrial",
-                "Ceccular response/renal homeostasis",
-                "B-cell/antigen receptor pathway",
-                "Glomeruli",
-                "Fibrotic",
-                "Muscle contraction/myofibril, ??")
-
-annotation_table <- data.frame(cluster_no, annotation)
-colnames(annotation_table) <- c("Cluster", "Annotation")
-
-gt(annotation_table) |> 
-  tab_options(table.font.names = "Cambria", table.font.size = 12)
