@@ -406,18 +406,18 @@ AMRvsIFTA_terms$diag <- "AMR vs IF/TA"
 
 test <- rbind(TCMRvsIFTA_terms, AMRvsIFTA_terms)
 
-plot <- ggplot(test, aes(x = factor(term_name, level = top3_terms), 
+plot1 <- ggplot(test, aes(x = factor(term_name, level = top3_terms), 
                         y = factor(diag), size = precision, fill = -log10(p_value),
                         color = -log10(p_value))) +
   geom_point() + 
   coord_flip() +
-  ylab("") + xlab("") + labs(title = "Top 5 GO:BP terms per disease comparison") +
+  ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per disease comparison") +
   theme(axis.text.y = , axis.text.x = element_text(angle = 45, hjust = 1), 
         legend.title = element_text(size = 8), plot.title.position = "plot", 
         plot.title = element_text(hjust = 0.0))
 
 # Save
-ggsave(plot = plot, filename = "all_upregulated.jpeg", 
+ggsave(plot = plot1, filename = "all_upregulated.jpeg", 
        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/")
 
 # STEP 5: GO Analysis per cluster. ----
@@ -1127,18 +1127,22 @@ allterms <- c(top5_terms_TCMRvsIFTA, top5_terms_AMRvsIFTA)
 all <- rbind(TCMRvsIFTA_terms_percl, AMRvsIFTA_terms_percl)
 
 
-plot <- ggplot(all, aes(x = factor(term_name, level = allterms), 
+plot2 <- ggplot(all, aes(x = factor(term_name, level = allterms), 
                                           y = factor(cluster), size = precision, fill = -log10(p_value),
                                           color = -log10(p_value))) +
   geom_point() + 
   coord_flip() +
   facet_wrap(~diag) +
-  ylab("") + xlab("") + labs(title = "Top 5 GO:BP terms per cluster in AMR and TCMR vs IF/TA") +
+  ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per cluster in AMR and TCMR vs IF/TA") +
   theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
         legend.title = element_text(size = 8), plot.title.position = "plot", 
         plot.title = element_text(hjust = 0),
         plot.subtitle = element_text(hjust = 0))
 
-ggsave(plot = plot, filename = "top5_per_cluster_alldiseases.jpeg", 
+ggsave(plot = plot2, filename = "top5_per_cluster_alldiseases.jpeg", 
        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/",
        width = 10)
+
+## Final figure ----
+Fig_5 <- ggarrange(plot1, plot2, labels = c("A", "B"), widths = c(1,2))
+ggsave(plot = Fig_5, filename = "GO_results.jpeg", path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/", width = 15)
