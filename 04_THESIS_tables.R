@@ -3,6 +3,7 @@ library(dplyr)
 library(gt)
 library(gtsummary)
 library(readxl)
+library(tidyr)
 
 # Table 1 ----
 # Set WD
@@ -90,4 +91,90 @@ SR_table <- tibble::rownames_to_column(as.data.frame(SR_table), "Measurement")
 gt(SR_table) |> tab_spanner(label = "Visium sample number", columns = c(2:7)) |>
   tab_options(table.font.names = "Cambria", table.font.size = 12) |>
   gt::gtsave(filename = "Table2_SR_output.png")
+
+
+# Table 6 ----
+setwd("E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/volcano_plots/")
+genes_of_interest <- c("ACTC1", "XIRP2", "CXCL9", "MYH2", "TNNT3", "KRT1")
+
+# Load TCMR vs IF/TA
+TCMRvsIFTA_xlsx <- read_excel("01_TCMRvsIFTA.xlsx")
+# Add diagnosis
+TCMRvsIFTA_xlsx$diag <- "TCMR vs IF/TA"
+# Obtain rows with genes of interest
+TCMRvsIFTA_xlsx <- filter(TCMRvsIFTA_xlsx, gene %in% genes_of_interest)
+
+# Load AMR vs IF/TA
+AMRvsIFTA_xlsx <- read_excel("02_AMRvsIFTA.xlsx")
+# Add diagnosis
+AMRvsIFTA_xlsx$diag <- "AMR vs IF/TA"
+# Obtain rows with genes of interest
+AMRvsIFTA_xlsx <- filter(AMRvsIFTA_xlsx, gene %in% genes_of_interest)
+
+# Load TCMR vs AMR
+TCMRvsAMR_xlsx <- read_excel("03_TCMRvsAMR.xlsx")
+# Add diagnosis
+TCMRvsAMR_xlsx$diag <- "TCMR vs AMR"
+# Obtain rows with genes of interest
+TCMRvsAMR_xlsx <- filter(TCMRvsAMR_xlsx, gene %in% genes_of_interest)
+
+all_genes_of_interest <- rbind(TCMRvsIFTA_xlsx, AMRvsIFTA_xlsx, TCMRvsAMR_xlsx)
+all_genes_of_interest <- all_genes_of_interest[,2:8]
+all_genes_of_interest <- all_genes_of_interest[,-2:-4]
+all_genes_of_interest <- all_genes_of_interest[,-3]
+colnames(all_genes_of_interest) <- c("Log2FC", "Gene", "Diagnosis")
+
+all_genes_of_interest1 <- pivot_wider(all_genes_of_interest, names_from = 'Diagnosis', values_from = 'Log2FC')
+all_genes_of_interest1 <- all_genes_of_interest1[c(2,3,1,5,4,6),]
+
+gt(all_genes_of_interest1) |>
+  tab_header(title = md("**Top 5 differentially expressed genes of interest**")) |>
+  tab_options(table.font.names = "Cambria", table.font.size = 12) |>
+  fmt_number(decimals = , columns = c(colnames(all_genes_of_interest1[2:4]))) |>
+  tab_spanner(label = "Diagnosis comparison", columns = c(2:4)) |>
+  tab_style(style = list(
+    cell_fill(color = "#e8c5bd"),
+    cell_text(style = "italic")),
+    locations = cells_body(
+      columns = c(`TCMR vs IF/TA`),
+      rows = `TCMR vs IF/TA` > 0)) |>
+  
+  tab_style(style = list(
+      cell_fill(color = "#e8c5bd"),
+      cell_text(style = "italic")),
+    locations = cells_body(
+      columns = c(`AMR vs IF/TA`),
+      rows = `AMR vs IF/TA` > 0)) |>
+
+  tab_style(style = list(
+    cell_fill(color = "#e8c5bd"),
+    cell_text(style = "italic")),
+    locations = cells_body(
+      columns = c(`TCMR vs AMR`),
+      rows = `TCMR vs AMR` > 0)) |>
+  
+  tab_style(style = list(
+    cell_fill(color = "#bddee8"),
+    cell_text(style = "italic")),
+    locations = cells_body(
+      columns = c(`TCMR vs IF/TA`),
+      rows = `TCMR vs IF/TA` < 0)) |>
+  
+  tab_style(style = list(
+    cell_fill(color = "#bddee8"),
+    cell_text(style = "italic")),
+    locations = cells_body(
+      columns = c(`AMR vs IF/TA`),
+      rows = `AMR vs IF/TA` < 0)) |>
+  
+  tab_style(style = list(
+    cell_fill(color = "#bddee8"),
+    cell_text(style = "italic")),
+    locations = cells_body(
+      columns = c(`TCMR vs AMR`),
+      rows = `TCMR vs AMR` < 0)) |>
+  tab_options(data_row.padding = pct(1.5)) |>
+  gt::gtsave(filename = "Table6_DGEA_genesofinterest.png", path = "E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/")
+
+
 
