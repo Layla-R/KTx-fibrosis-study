@@ -128,7 +128,7 @@ all_genes_of_interest1 <- pivot_wider(all_genes_of_interest, names_from = 'Diagn
 all_genes_of_interest1 <- all_genes_of_interest1[c(2,3,1,5,4,6),]
 
 gt(all_genes_of_interest1) |>
-  tab_options(table.font.names = "Cambria", table.font.size = 12) |>
+  tab_options(table.font.names = "Cambria", table.font.size = 10) |>
   fmt_number(decimals = , columns = c(colnames(all_genes_of_interest1[2:4]))) |>
   tab_spanner(label = "Diagnosis comparison", columns = c(2:4)) |>
   tab_style(style = list(
