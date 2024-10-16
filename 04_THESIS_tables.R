@@ -128,7 +128,6 @@ all_genes_of_interest1 <- pivot_wider(all_genes_of_interest, names_from = 'Diagn
 all_genes_of_interest1 <- all_genes_of_interest1[c(2,3,1,5,4,6),]
 
 gt(all_genes_of_interest1) |>
-  tab_header(title = md("**Top 5 differentially expressed genes of interest**")) |>
   tab_options(table.font.names = "Cambria", table.font.size = 12) |>
   fmt_number(decimals = , columns = c(colnames(all_genes_of_interest1[2:4]))) |>
   tab_spanner(label = "Diagnosis comparison", columns = c(2:4)) |>
@@ -175,6 +174,3 @@ gt(all_genes_of_interest1) |>
       rows = `TCMR vs AMR` < 0)) |>
   tab_options(data_row.padding = pct(1.5)) |>
   gt::gtsave(filename = "Table6_DGEA_genesofinterest.png", path = "E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/")
-
-
-
