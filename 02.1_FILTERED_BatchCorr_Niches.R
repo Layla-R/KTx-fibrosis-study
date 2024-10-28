@@ -732,7 +732,7 @@ volcano_TCMRvsIFTA <- ggplot(TCMRvsIFTA, aes(x = avg_log2FC, y = -log10(p_val_ad
   geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
   scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
                      labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "TCMR vs IF/TA", color = "") +
+  labs(title = "aTCMR vs IF/TA", color = "") +
   geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
   guides(colour = guide_legend(override.aes = aes(label = ""))) 
 
@@ -767,7 +767,7 @@ volcano_AMRvsIFTA <- ggplot(AMRvsIFTA, aes(x = avg_log2FC, y = -log10(p_val_adj)
   geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
   scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
                      labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "AMR vs IF/TA", color = "") +
+  labs(title = "aAMR vs IF/TA", color = "") +
   geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
   guides(colour = guide_legend(override.aes = aes(label = "")))
 
@@ -799,7 +799,7 @@ volcano_TCMRvsAMR <- ggplot(TCMRvsAMR, aes(x = avg_log2FC, y = -log10(p_val_adj)
   geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
   scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
                      labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "TCMR vs AMR", color = "") +
+  labs(title = "aTCMR vs aAMR", color = "") +
   geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
   guides(colour = guide_legend(override.aes = aes(label = "")))
 
@@ -826,7 +826,7 @@ ggsave("volcano_plots/03_TCMRvsAMR.jpeg", plot = volcano_TCMRvsAMR,
 Fig_VolcanoPlots2 <- ggarrange(ggarrange((volcano_TCMRvsIFTA + NoLegend()), (volcano_AMRvsIFTA + NoLegend()), labels = c("A", "B")),
                               ggarrange(volcano_TCMRvsAMR, labels = "C"), nrow = 2, 
                               font.label = list(size = 20))
-ggsave(plot = Fig_VolcanoPlots2, filename = "Thesis_Fig_2.223.jpeg",
+ggsave(plot = Fig_VolcanoPlots2, filename = "Thesis_Fig_2.223_2.jpeg",
        height = 11, width = 13)
 
 ## Figure xx - volcano plot tables ----
