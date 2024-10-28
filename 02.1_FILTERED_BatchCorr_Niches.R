@@ -845,7 +845,7 @@ TCMRvsIFTA_table <- TCMRvsIFTA_table[,-2:-3]
 colnames(TCMRvsIFTA_table) <- c("Log2FC", "Adjusted p-value", "Gene")
 
 # Create tables
-gt(TCMRvsIFTA_table) |> tab_header(title = md("**Upregulated and downregulated genes in TCMR vs IF/TA**"),
+gt(TCMRvsIFTA_table) |> tab_header(title = md("**Upregulated and downregulated genes in aTCMR vs IF/TA**"),
                                    subtitle = "Top 5 highest and lowest Log2FC are presented") |>
   tab_row_group(label = md("**Upregulated**"), rows = 1:5) |>
   tab_row_group(label = md("**Downregulated**"), rows = 6:10) |>
@@ -853,7 +853,7 @@ gt(TCMRvsIFTA_table) |> tab_header(title = md("**Upregulated and downregulated g
   tab_options(table.font.names = "Cambria", table.font.size = 12) |>
   fmt_number(decimals = , columns = "Log2FC") |>
   tab_options(data_row.padding = pct(1)) |>
-  gt::gtsave(filename = "Table3_volcano_output.png")
+  gt::gtsave(filename = "Table3_volcano_output2.png")
 
 
 # AMR vs IF/TA
@@ -868,7 +868,7 @@ AMRvsIFTA_table <- AMRvsIFTA_table[,2:6]
 AMRvsIFTA_table <- AMRvsIFTA_table[,-2:-3]
 colnames(AMRvsIFTA_table) <- c("Log2FC", "Adjusted p-value", "Gene")
 
-gt(AMRvsIFTA_table) |> tab_header(title = md("**Upregulated and downregulated genes in AMR vs IF/TA**"),
+gt(AMRvsIFTA_table) |> tab_header(title = md("**Upregulated and downregulated genes in aAMR vs IF/TA**"),
                                    subtitle = "Top 5 highest and lowest Log2FC are presented") |>
   tab_row_group(label = md("**Upregulated**"), rows = 1:5) |>
   tab_row_group(label = md("**Downregulated**"), rows = 6:10) |>
@@ -876,7 +876,7 @@ gt(AMRvsIFTA_table) |> tab_header(title = md("**Upregulated and downregulated ge
   tab_options(table.font.names = "Cambria", table.font.size = 12) |>
   fmt_number(decimals = , columns = "Log2FC") |>
   tab_options(data_row.padding = pct(1)) |>
-  gt::gtsave(filename = "Table4_volcano_output.png")
+  gt::gtsave(filename = "Table4_volcano_output2.png")
 
 
 # TCMR vs AMR
@@ -891,7 +891,7 @@ TCMRvsAMR_table <- TCMRvsAMR_table[,2:6]
 TCMRvsAMR_table <- TCMRvsAMR_table[,-2:-3]
 colnames(TCMRvsAMR_table) <- c("Log2FC", "Adjusted p-value", "Gene")
 
-gt(TCMRvsAMR_table) |> tab_header(title = md("**Upregulated and downregulated genes in TCMR vs AMR**"),
+gt(TCMRvsAMR_table) |> tab_header(title = md("**Upregulated and downregulated genes in aTCMR vs aAMR**"),
                                   subtitle = "Top 5 highest and lowest Log2FC are presented") |>
   tab_row_group(label = md("**Upregulated**"), rows = 1:5) |>
   tab_row_group(label = md("**Downregulated**"), rows = 6:10) |>
@@ -899,7 +899,7 @@ gt(TCMRvsAMR_table) |> tab_header(title = md("**Upregulated and downregulated ge
   tab_options(table.font.names = "Cambria", table.font.size = 12) |>
   fmt_number(decimals = , columns = "Log2FC") |>
   tab_options(data_row.padding = pct(1)) |>
-  gt::gtsave(filename = "Table5_volcano_output.png")
+  gt::gtsave(filename = "Table5_volcano_output2.png")
 
 
 
