@@ -401,8 +401,8 @@ top3_terms <- c(TCMRvsIFTA_GO_top3_terms, AMRvsIFTA_GO_top3_terms)
 TCMRvsIFTA_terms <- filter(TCMRvsIFTA_GO_up, term_name %in% top3_terms)
 AMRvsIFTA_terms <- filter(AMRvsIFTA_GO_up, term_name %in% top3_terms)
 
-TCMRvsIFTA_terms$diag <- "TCMR vs IF/TA"
-AMRvsIFTA_terms$diag <- "AMR vs IF/TA"
+TCMRvsIFTA_terms$diag <- "aTCMR vs IF/TA"
+AMRvsIFTA_terms$diag <- "aAMR vs IF/TA"
 
 test <- rbind(TCMRvsIFTA_terms, AMRvsIFTA_terms)
 
@@ -1124,6 +1124,8 @@ ggsave(plot = plot, filename = "top5_per_cluster_AMRvsIFTA.jpeg",
 
 ## Both diseases combined ----
 allterms <- c(top5_terms_TCMRvsIFTA, top5_terms_AMRvsIFTA)
+TCMRvsIFTA_terms_percl$diag <- 'aTCMR vs IF/TA'
+AMRvsIFTA_terms_percl$diag <- 'aAMR vs IF/TA'
 all <- rbind(TCMRvsIFTA_terms_percl, AMRvsIFTA_terms_percl)
 
 
@@ -1133,7 +1135,7 @@ plot2 <- ggplot(all, aes(x = factor(term_name, level = allterms),
   geom_point() + 
   coord_flip() +
   facet_wrap(~diag) +
-  ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per cluster in AMR and TCMR vs IF/TA") +
+  ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per cluster in aAMR and aTCMR vs IF/TA") +
   theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
         legend.title = element_text(size = 8), plot.title.position = "plot", 
         plot.title = element_text(hjust = 0),
@@ -1145,4 +1147,5 @@ ggsave(plot = plot2, filename = "top5_per_cluster_alldiseases.jpeg",
 
 ## Final figure ----
 Fig_5 <- ggarrange(plot1, plot2, labels = c("A", "B"), widths = c(1,2))
-ggsave(plot = Fig_5, filename = "GO_results.jpeg", path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/", width = 15)
+ggsave(plot = Fig_5, filename = "GO_results_2.jpeg",
+       path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/", width = 15)
