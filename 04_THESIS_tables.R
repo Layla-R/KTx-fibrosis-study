@@ -11,9 +11,9 @@ setwd("E:/MSc_EMC_project/Main_project/01_QC_outs/")
 
 info_samples.xlsx <- read_excel("E:/MSc_EMC_project/Main_project/Main File_snRNAseq cases_v3xlsx.xlsx",
                                 sheet = "Sheet2")
-info_samples.xlsx <- info_samples.xlsx[, c(1, 2, 21:31)] 
+info_samples.xlsx <- info_samples.xlsx[, c(1, 2, 30:31)] 
 
-colnames(info_samples.xlsx) <- c("PA_number", "Diagnosis", "ZIS", "Gender")
+colnames(info_samples.xlsx) <- c("PA_number", "Diagnosis", "Age", "Gender")
 colnames(info_samples.xlsx)[13] <- "Gender"
 
 sample_list <- c("H16-8962", "H14-11604", "H14-23350", 
@@ -25,9 +25,9 @@ sample_info <- info_samples.xlsx %>% filter(info_samples.xlsx[[1]] %in% sample_l
 
 # Adjustments
 sample_info$Age <- as.numeric(as.character(sample_info$Age))
-sample_info[sample_info == "aAMR, C4d+"] <- "AMR"
-sample_info[sample_info == "aTCMR1B"] <- "TCMR"
-sample_info[sample_info == "aTCMR2B"] <- "TCMR"
+sample_info[sample_info == "aAMR, C4d+"] <- "aAMR"
+sample_info[sample_info == "aTCMR1B"] <- "aTCMR"
+sample_info[sample_info == "aTCMR2B"] <- "aTCMR"
 sample_info[sample_info == "IFTA"] <- "IF/TA"
 
 # Create table
@@ -46,7 +46,7 @@ study_population <- study_population %>%
   # Adjust options
   gt::tab_options(table.font.names = "Cambria", table.font.size = 10) %>%
   # Save
-  gt::gtsave(filename = "Table1_study_population.png")
+  gt::gtsave(filename = "Table1_study_population2.png")
 
 
 # Table 2 ----
@@ -100,21 +100,21 @@ genes_of_interest <- c("ACTC1", "XIRP2", "CXCL9", "MYH2", "TNNT3", "KRT1")
 # Load TCMR vs IF/TA
 TCMRvsIFTA_xlsx <- read_excel("01_TCMRvsIFTA.xlsx")
 # Add diagnosis
-TCMRvsIFTA_xlsx$diag <- "TCMR vs IF/TA"
+TCMRvsIFTA_xlsx$diag <- "aTCMR vs IF/TA"
 # Obtain rows with genes of interest
 TCMRvsIFTA_xlsx <- filter(TCMRvsIFTA_xlsx, gene %in% genes_of_interest)
 
 # Load AMR vs IF/TA
 AMRvsIFTA_xlsx <- read_excel("02_AMRvsIFTA.xlsx")
 # Add diagnosis
-AMRvsIFTA_xlsx$diag <- "AMR vs IF/TA"
+AMRvsIFTA_xlsx$diag <- "aAMR vs IF/TA"
 # Obtain rows with genes of interest
 AMRvsIFTA_xlsx <- filter(AMRvsIFTA_xlsx, gene %in% genes_of_interest)
 
 # Load TCMR vs AMR
 TCMRvsAMR_xlsx <- read_excel("03_TCMRvsAMR.xlsx")
 # Add diagnosis
-TCMRvsAMR_xlsx$diag <- "TCMR vs AMR"
+TCMRvsAMR_xlsx$diag <- "aTCMR vs aAMR"
 # Obtain rows with genes of interest
 TCMRvsAMR_xlsx <- filter(TCMRvsAMR_xlsx, gene %in% genes_of_interest)
 
@@ -135,42 +135,42 @@ gt(all_genes_of_interest1) |>
     cell_fill(color = "#e8c5bd"),
     cell_text(style = "italic")),
     locations = cells_body(
-      columns = c(`TCMR vs IF/TA`),
-      rows = `TCMR vs IF/TA` > 0)) |>
+      columns = c(`aTCMR vs IF/TA`),
+      rows = `aTCMR vs IF/TA` > 0)) |>
   
   tab_style(style = list(
       cell_fill(color = "#e8c5bd"),
       cell_text(style = "italic")),
     locations = cells_body(
-      columns = c(`AMR vs IF/TA`),
-      rows = `AMR vs IF/TA` > 0)) |>
+      columns = c(`aAMR vs IF/TA`),
+      rows = `aAMR vs IF/TA` > 0)) |>
 
   tab_style(style = list(
     cell_fill(color = "#e8c5bd"),
     cell_text(style = "italic")),
     locations = cells_body(
-      columns = c(`TCMR vs AMR`),
-      rows = `TCMR vs AMR` > 0)) |>
+      columns = c(`aTCMR vs aAMR`),
+      rows = `aTCMR vs aAMR` > 0)) |>
   
   tab_style(style = list(
     cell_fill(color = "#bddee8"),
     cell_text(style = "italic")),
     locations = cells_body(
-      columns = c(`TCMR vs IF/TA`),
-      rows = `TCMR vs IF/TA` < 0)) |>
+      columns = c(`aTCMR vs IF/TA`),
+      rows = `aTCMR vs IF/TA` < 0)) |>
   
   tab_style(style = list(
     cell_fill(color = "#bddee8"),
     cell_text(style = "italic")),
     locations = cells_body(
-      columns = c(`AMR vs IF/TA`),
-      rows = `AMR vs IF/TA` < 0)) |>
+      columns = c(`aAMR vs IF/TA`),
+      rows = `aAMR vs IF/TA` < 0)) |>
   
   tab_style(style = list(
     cell_fill(color = "#bddee8"),
     cell_text(style = "italic")),
     locations = cells_body(
-      columns = c(`TCMR vs AMR`),
-      rows = `TCMR vs AMR` < 0)) |>
+      columns = c(`aTCMR vs aAMR`),
+      rows = `aTCMR vs aAMR` < 0)) |>
   tab_options(data_row.padding = pct(1.5)) |>
-  gt::gtsave(filename = "Table6_DGEA_genesofinterest.png", path = "E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/")
+  gt::gtsave(filename = "Table6_DGEA_genesofinterest2.png", path = "E:/MSc_EMC_project/Main_project/02_BatchCorr_Niches_outs/filtereddata/")
