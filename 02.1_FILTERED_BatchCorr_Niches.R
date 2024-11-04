@@ -829,6 +829,15 @@ Fig_VolcanoPlots2 <- ggarrange(ggarrange((volcano_TCMRvsIFTA + NoLegend()), (vol
 ggsave(plot = Fig_VolcanoPlots2, filename = "Thesis_Fig_2.223_2.jpeg",
        height = 11, width = 13)
 
+# OPTION 3
+Fig_VolcanoPlots3 <- ggarrange(ggarrange((volcano_TCMRvsIFTA + NoLegend()), (volcano_AMRvsIFTA + NoLegend()), labels = c("A", "B")),
+          ggarrange(volcano_TCMRvsAMR + theme(aspect.ratio = 0.9), labels = "C"), 
+          font.label = list(size = 20),
+          nrow = 2)
+
+ggsave(plot = Fig_VolcanoPlots3, filename = "Thesis_Fig_2.3.jpeg",
+       height = 13, width = 13)
+
 ## Figure xx - volcano plot tables ----
 library(gt)
 
