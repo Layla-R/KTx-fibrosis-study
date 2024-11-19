@@ -27,11 +27,9 @@ library(glmGamPoi)
 library(harmony)
 library(hdf5r)
 library(matrixStats)
-# library(Matrix.utils)
 library(metafolio)
 library(patchwork)
 library(readxl)
-# library(scCustomize)
 library(sctransform)
 library(SeuratObject, lib.loc = 'C:/Users/Layla/Documents/R-packages') # Load 5.0.1.
 library(Seurat, lib.loc = 'C:/Users/Layla/Documents/R-packages') # Load 5.0.2.
@@ -1063,17 +1061,20 @@ no_HLAi <- c("H16-8962", "H14-11604", "H14-23350",
 
 Idents(combined_samples) <- 'orig.ident'
 plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial", 
-                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
-ggsave(filename ="09.5_nCount_per_sample_noHLAi.jpeg",  plot = plot_1,
-       width = 10 , height = 10)
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend() +
+  theme(text = element_text(size = 20), axis.text.x = element_text(size = 20))
+# ggsave(filename ="09.5_nCount_per_sample_noHLAi.jpeg",  plot = plot_1,
+       # width = 10 , height = 10)
 
 plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial", 
-                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
-ggsave(filename = "10.5_nFeature_per_sample_noHLAi.jpeg", plot = plot_2,
-       width = 10, height = 10)
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend() +
+  theme(text = element_text(size = 20), axis.text.x = element_text(size = 20))
+# ggsave(filename = "10.5_nFeature_per_sample_noHLAi.jpeg", plot = plot_2,
+       # width = 10, height = 10)
 
 plot_3 <- VlnPlot(combined_samples, features = "percent.mt", 
-                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend()
+                  group.by = "orig.ident", pt.size = 0, idents = no_HLAi) + NoLegend() +
+  theme(text = element_text(size = 20), axis.text.x = element_text(size = 20))
 
 Fig_QC_A <- wrap_plots(plot_1, plot_2, plot_3, ncol = 1)
 ### B ----
@@ -1133,9 +1134,10 @@ top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
 pca <- prcomp(t(assay(vsd)[top500_genes,]))
 
 Fig_QC_B <- autoplot(pca, data = metadata, colour = "diag",
-                     label = T, label.vjust = -1) +
+                     label = T, label.vjust = -0.6, label.size = 7) +
   ggtitle("PCA of all samples") +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
+  guides(colour = guide_legend(override.aes = aes(label = ""))) +
+  theme(text = element_text(size = 20), legend.text = element_text(size = 20))
 
 
 ### C ----
@@ -1159,9 +1161,11 @@ combined_samples <- subset(combined_samples, idents = no_HLAi)
 
 # QC plots
 plot_1 <- VlnPlot(combined_samples, features = "nCount_Spatial",
-                  group.by = "orig.ident", split.by = "lowUMI", pt.size = 0.5)
+                  group.by = "orig.ident", split.by = "lowUMI", pt.size = 0.5) +
+  theme(text = element_text(size = 20), axis.text.x = element_text(size = 20))
 plot_2 <- VlnPlot(combined_samples, features = "nFeature_Spatial",
-                  group.by = "orig.ident", split.by = "lowFeature", pt.size = 0.5)
+                  group.by = "orig.ident", split.by = "lowFeature", pt.size = 0.5) +
+  theme(text = element_text(size = 20), axis.text.x = element_text(size = 20))
 
 Fig_QC_C <- wrap_plots(plot_1, plot_2, ncol = 1)
 ### D ----
@@ -1217,14 +1221,18 @@ top500_genes <- order(rowVars(assay(vsd)), decreasing = T)[1:500]
 # Perform a PCA on the data in assay(x) for the selected genes.
 pca <- prcomp(t(assay(vsd)[top500_genes,]))
 Fig_QC_D <- autoplot(pca, data = metadata, colour = "diag",
-                     label = T, label.vjust = -1) +
+                     label = T, label.vjust = -1, label.size = 7) +
   ggtitle("PCA of filtered data") +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
+  guides(colour = guide_legend(override.aes = aes(label = ""))) +
+  theme(text = element_text(size = 20), legend.text = element_text(size = 20))
+
 ## arrange----
-# Fig_QC <- ggarrange(ggarrange(Fig_QC_A, Fig_QC_B, ncol = 2, labels = c("A", "B")),
-#                     ggarrange(Fig_QC_C, labels = "C"), nrow = 2)
-Fig_QC <- ggarrange(Fig_QC_A, Fig_QC_B, Fig_QC_C, Fig_QC_D,
+
+Fig_QC <- ggarrange(Fig_QC_A,
+                    Fig_QC_B,
+                    Fig_QC_C,
+                    Fig_QC_D,
                     labels = c("A", "B", "C", "D"),
-                    font.label = list(size = 20))
-ggsave(plot = Fig_QC, filename = "Thesis_Fig_1.jpeg",
-       height = 17, width = 20)
+                    font.label = list(size = 20), widths = c(1, 1.3))
+ggsave(plot = Fig_QC, filename = "Thesis_Fig_1_v3.jpeg",
+       height = 22, width = 27)
