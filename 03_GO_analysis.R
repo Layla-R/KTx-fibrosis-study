@@ -411,9 +411,11 @@ plot1 <- ggplot(test, aes(x = factor(term_name, level = top3_terms),
   geom_point() + 
   coord_flip() +
   ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per disease comparison") +
-  theme(axis.text.y = , axis.text.x = element_text(angle = 45, hjust = 1), 
-        legend.title = element_text(size = 8), plot.title.position = "plot", 
-        plot.title = element_text(hjust = 0.0))
+  theme(axis.text.y = , axis.text.x = element_text(angle = 45, hjust = 1, size = 10), 
+        title = element_text(size = 9),
+        legend.title = element_text(size = 10), plot.title.position = "plot", 
+        plot.title = element_text(hjust = 0.0),
+        text = element_text(size = 10))
 
 # Save
 ggsave(plot = plot1, filename = "all_upregulated.jpeg", 
@@ -1929,16 +1931,30 @@ df_IFTAvsTCMR$diag <- "IF/TA vs aTCMR"
 IFTAvsTCMR_terms_percl <- filter(df_IFTAvsTCMR, term_name %in% top5_terms_IFTAvsTCMR)
 IFTAvsTCMR_terms_percl$cluster <- as.numeric(IFTAvsTCMR_terms_percl$cluster)
 
-plot6 <- ggplot(IFTAvsTCMR_terms_percl, aes(x = factor(term_name, level = top5_terms_IFTAvsTCMR), 
+IFTAvsTCMR_terms_percl_c <- IFTAvsTCMR_terms_percl
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 0] <- "Tubular: Loop of Henle"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 1] <- "Tubular: Proximal tubules (1)"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 2] <- "Tubular: Distal tubules"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 3] <- "Fibrotic/Inflammatory"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 4] <- "Tubular: Proximal tubules (2)"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 5] <- "Mixed"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 6] <- "Collecting duct"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 7] <- "Immune niche"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 8] <- "Glomeruli"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 9] <- "Vascular niche"
+IFTAvsTCMR_terms_percl_c$cluster[IFTAvsTCMR_terms_percl_c$cluster == 10] <- "Renal capsule"
+
+plot6 <- ggplot(IFTAvsTCMR_terms_percl_c, aes(x = factor(term_name, level = top5_terms_IFTAvsTCMR), 
                                            y = factor(cluster), size = precision, fill = -log10(p_value),
                                            color = -log10(p_value))) +
   geom_point() + 
   coord_flip() +
   ylab("") + xlab("") + labs(title = "Top 5 GO:BP terms per cluster", subtitle = "IF/TA vs aTCMR") +
-  theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
+  theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 45, hjust = 1), 
         legend.title = element_text(size = 8), plot.title.position = "plot", 
         plot.title = element_text(hjust = 0),
-        plot.subtitle = element_text(hjust = 0))
+        plot.subtitle = element_text(hjust = 0),
+        text = element_text(size = 13))
 
 ggsave(plot = plot6, filename = "top5_per_cluster_IFTAvsTCMR.jpeg", 
        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/",
@@ -2186,17 +2202,29 @@ df_IFTAvsAMR$diag <- "IF/TA vs aAMR"
 IFTAvsAMR_terms_percl <- filter(df_IFTAvsAMR, term_name %in% top5_terms_IFTAvsAMR)
 IFTAvsAMR_terms_percl$cluster <- as.numeric(IFTAvsAMR_terms_percl$cluster)
 
+IFTAvsAMR_terms_percl_c <- IFTAvsAMR_terms_percl
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 0] <- "Tubular: Loop of Henle"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 1] <- "Tubular: Proximal tubules (1)"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 2] <- "Tubular: Distal tubules"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 3] <- "Fibrotic/Inflammatory"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 4] <- "Tubular: Proximal tubules (2)"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 5] <- "Mixed"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 6] <- "Collecting duct"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 7] <- "Immune niche"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 8] <- "Glomeruli"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 9] <- "Vascular niche"
+IFTAvsAMR_terms_percl_c$cluster[IFTAvsAMR_terms_percl_c$cluster == 10] <- "Renal capsule"
 
-plot5 <- ggplot(IFTAvsAMR_terms_percl, aes(x = factor(term_name, level = top5_terms_IFTAvsAMR), 
-                                          y = factor(cluster), size = precision, fill = -log10(p_value),
-                                          color = -log10(p_value))) +
+plot5 <- ggplot(IFTAvsAMR_terms_percl_c, aes(x = factor(term_name, level = top5_terms_IFTAvsAMR), 
+                                             y = factor(cluster), size = precision, fill = -log10(p_value),
+                                             color = -log10(p_value))) +
   geom_point() + 
   coord_flip() +
   ylab("") + xlab("") + labs(title = "Top 5 GO:BP terms per cluster", subtitle = "IF/TA vs aAMR") +
-  theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
+  theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 45, hjust = 1), 
         legend.title = element_text(size = 8), plot.title.position = "plot", 
         plot.title = element_text(hjust = 0),
-        plot.subtitle = element_text(hjust = 0))
+        plot.subtitle = element_text(hjust = 0), text = element_text(size = 13))
 
 ggsave(plot = plot5, filename = "top5_per_cluster_IFTAvsAMR.jpeg", 
        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/",
@@ -2214,45 +2242,60 @@ TCMRvsIFTA_terms_percl$diag <- 'aTCMR vs IF/TA'
 AMRvsIFTA_terms_percl$diag <- 'aAMR vs IF/TA'
 all1 <- rbind(TCMRvsIFTA_terms_percl, AMRvsIFTA_terms_percl)
 
+all1_c <- all1
+all1_c$cluster[all1_c$cluster == 0] <- "Tubular: Loop of Henle"
+all1_c$cluster[all1_c$cluster == 1] <- "Tubular: Proximal tubules (1)"
+all1_c$cluster[all1_c$cluster == 2] <- "Tubular: Distal tubules"
+all1_c$cluster[all1_c$cluster == 3] <- "Fibrotic/Inflammatory"
+all1_c$cluster[all1_c$cluster == 4] <- "Tubular: Proximal tubules (2)"
+all1_c$cluster[all1_c$cluster == 5] <- "Mixed"
+all1_c$cluster[all1_c$cluster == 6] <- "Collecting duct"
+all1_c$cluster[all1_c$cluster == 7] <- "Immune niche"
+all1_c$cluster[all1_c$cluster == 8] <- "Glomeruli"
+all1_c$cluster[all1_c$cluster == 9] <- "Vascular niche"
+all1_c$cluster[all1_c$cluster == 10] <- "Renal capsule"
 
-plot2 <- ggplot(all1, aes(x = factor(term_name, level = allterms1),
-                         y = factor(cluster), size = precision, fill = -log10(p_value),
-                         color = -log10(p_value))) +
+
+plot2 <- ggplot(all1_c, aes(x = factor(term_name, level = allterms1),
+                            y = factor(cluster), size = precision, fill = -log10(p_value),
+                            color = -log10(p_value))) +
   geom_point() + 
   coord_flip() +
   facet_wrap(~diag) +
   ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per cluster in aAMR and aTCMR vs IF/TA") +
-  theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
+  theme(axis.text.y = element_text(angle = 0, size = 10),
+        axis.text.x = element_text(angle = 45, size = 10, hjust = 1), 
         legend.title = element_text(size = 8), plot.title.position = "plot", 
         plot.title = element_text(hjust = 0),
-        plot.subtitle = element_text(hjust = 0))
+        plot.subtitle = element_text(hjust = 0),
+        text = element_text(size = 10))
 
 ggsave(plot = plot2, filename = "top5_per_cluster_alldiseases.jpeg", 
        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/",
        width = 10)
 
-#IFTA vs Disease
-allterms <- c(top5_terms_IFTAvsTCMR, top5_terms_IFTAvsAMR)
-IFTAvsTCMR_terms_percl$diag <- 'IF/TA vs aTCMR'
-IFTAvsAMR_terms_percl$diag <- 'IF/TA vs aAMR'
-all <- rbind(IFTAvsTCMR_terms_percl, IFTAvsAMR_terms_percl)
+# #IFTA vs Disease
+# allterms <- c(top5_terms_IFTAvsTCMR, top5_terms_IFTAvsAMR)
+# IFTAvsTCMR_terms_percl$diag <- 'IF/TA vs aTCMR'
+# IFTAvsAMR_terms_percl$diag <- 'IF/TA vs aAMR'
+# all <- rbind(IFTAvsTCMR_terms_percl, IFTAvsAMR_terms_percl)
+# 
+# 
+# plot4 <- ggplot(all, aes(x = factor(term_name, level = allterms), 
+#                          y = factor(cluster), size = precision, fill = -log10(p_value),
+#                          color = -log10(p_value))) +
+#   geom_point() + 
+#   coord_flip() +
+#   facet_wrap(~diag) +
+#   ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per cluster in aAMR and aTCMR vs IF/TA") +
+#   theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
+#         legend.title = element_text(size = 8), plot.title.position = "plot", 
+#         plot.title = element_text(hjust = 0),
+#         plot.subtitle = element_text(hjust = 0))
 
-
-plot4 <- ggplot(all, aes(x = factor(term_name, level = allterms), 
-                         y = factor(cluster), size = precision, fill = -log10(p_value),
-                         color = -log10(p_value))) +
-  geom_point() + 
-  coord_flip() +
-  facet_wrap(~diag) +
-  ylab("") + xlab("") + labs(title = "   Top 5 GO:BP terms per cluster in aAMR and aTCMR vs IF/TA") +
-  theme(axis.text.y = element_text(angle = 0), axis.text.x = element_text(angle = 0, hjust = 0.4), 
-        legend.title = element_text(size = 8), plot.title.position = "plot", 
-        plot.title = element_text(hjust = 0),
-        plot.subtitle = element_text(hjust = 0))
-
-ggsave(plot = plot4, filename = "top5_per_cluster_alldiseases.jpeg", 
-       path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/",
-       width = 10)
+# ggsave(plot = plot4, filename = "top5_per_cluster_alldiseases.jpeg", 
+#        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/",
+#        width = 10)
 
 ## Final figure ----
 # plot1: tcmr vs ifta & amr vs ifta
@@ -2260,13 +2303,14 @@ ggsave(plot = plot4, filename = "top5_per_cluster_alldiseases.jpeg",
 # plot2: tcmr vs ifta & amr vs ifta per cluster
 # plot4: ifta vs tcmr & ifta vs amr per cluster
 
-Fig_5 <- ggarrange(plot1, plot2, labels = c("A", "B"), widths = c(1,2))
-ggsave(plot = Fig_5, filename = "GO_results_2.jpeg",
+Fig_5 <- ggarrange(plot1 + theme(text = element_text(size = 13)),
+                   plot2, labels = c("A", "B"), widths = c(1,2))
+ggsave(plot = Fig_5, filename = "GO_results_3.jpeg",
        path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/", width = 15)
 
-Fig_6 <-ggarrange(plot3, labels = "A",
-          ggarrange(plot5, plot6, labels = c("B", "C")), nrow = 2)
+# Fig_6 <-ggarrange(plot3, labels = "A",
+#           ggarrange(plot5, plot6, labels = c("B", "C")), nrow = 2)
 Fig_6 <- ggarrange( plot5 + labs(title = '   Top 5 GO:BP terms per cluster'),
                     plot6 + labs(title = '   Top 5 GO:BP terms per cluster'), labels = c("A", "B"))
-ggsave(plot = Fig_6, filename = "GO_results_3.jpeg",
-       path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/", width = 15, height = 8)
+ggsave(plot = Fig_6, filename = "GO_results_4.jpeg",
+       path = "E:/MSc_EMC_project/Main_project/03_GO_analysis_outs/", width = 15, height = 9)
