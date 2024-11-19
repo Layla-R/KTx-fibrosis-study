@@ -27,13 +27,10 @@ library(hdf5r)
 library(matrixStats)
 library(metafolio)
 library(patchwork)
-# library(presto)
 library(RColorBrewer)
 library(readxl)
 library(sctransform)
-# library(SeuratDisk)
 library(Seurat)
-# library(SeuratData)
 library(writexl)
 
 
@@ -112,6 +109,17 @@ print("!!! STEP 3 FINISHED. !!!")
 # STEP 4: Harmony integration & clustering. ----
 
 ## 4.1. Perform Harmony integration & clustering. ----
+# before_harmony <- RunUMAP(filtered_combined_samples, reduction = "pca",
+#                                      dims = 1:15)
+# before_harmony <- FindNeighbors(before_harmony,
+#                                            reduction = "pca", dims = 1:15)
+# before_harmony <- identity(before_harmony)
+# before_harmony <- DimPlot(before_harmony, group.by = "diag", label = F, pt.size = 1,
+#                           reduction = "umap") 
+# saveRDS(before_harmony, 'umap_before_harmony')
+# ggsave("02.1_pre-harmony_DimPlot_umap_diag.jpeg", before_harmony,
+#        height = 10, width = 12)
+
 filtered_combined_samples <- RunHarmony(filtered_combined_samples,
                                group.by.vars = "orig.ident", 
                                plot_convergence = T,
@@ -132,9 +140,9 @@ filtered_combined_samples <- FindNeighbors(filtered_combined_samples,
 filtered_combined_samples <- identity(filtered_combined_samples)
 
 # Dimplots
-plot_1 <- DimPlot(filtered_combined_samples, group.by = "diag", label = T, pt.size = 1,
+after_harmony <- DimPlot(filtered_combined_samples, group.by = "diag", label = F, pt.size = 1,
                   reduction = "umap")
-ggsave("03_DimPlot_umap_diag.jpeg", plot_1,
+ggsave("03_DimPlot_umap_diag.jpeg", after_harmony,
        height = 10, width = 12)
 
 plot_1 <- DimPlot(filtered_combined_samples, label = T, pt.size = 1,
@@ -233,22 +241,22 @@ filtered_combined_samples <- AddMetaData(filtered_combined_samples, metadata = p
 
 ### Plots for transfer anchors.
 
-for (anchor_no in 1:length(colnames(prediction_results))){
-  print(paste0("Current transfer anchor: ", colnames(prediction_results)[anchor_no]))
-  plot_list <- list()
-  
-  for (image in names(filtered_combined_samples@images)){
-    plot <- SpatialFeaturePlot(filtered_combined_samples, features = colnames(prediction_results)[anchor_no], images = image,
-                               alpha = c(0.6, 1), crop = F) + ggtitle(paste0(image))
-    plot_list[[image]] <- plot
-    
-    ggsave(plot = plot, filename = paste0("transfer_anchors/", colnames(prediction_results)[anchor_no], "/", image, ".jpeg"),
-           width = 10, height = 10)
-  }
-  ggsave(wrap_plots(plot_list, ncol = 5), filename = paste0("transfer_anchors/", colnames(prediction_results)[anchor_no], "_wrapped.jpeg"),
-         width = 13, height = 7)
-  plot_list <- list()
-}
+# for (anchor_no in 1:length(colnames(prediction_results))){
+#   print(paste0("Current transfer anchor: ", colnames(prediction_results)[anchor_no]))
+#   plot_list <- list()
+#   
+#   for (image in names(filtered_combined_samples@images)){
+#     plot <- SpatialFeaturePlot(filtered_combined_samples, features = colnames(prediction_results)[anchor_no], images = image,
+#                                alpha = c(0.6, 1), crop = F) + ggtitle(paste0(image))
+#     plot_list[[image]] <- plot
+#     
+#     ggsave(plot = plot, filename = paste0("transfer_anchors/", colnames(prediction_results)[anchor_no], "/", image, ".jpeg"),
+#            width = 10, height = 10)
+#   }
+#   ggsave(wrap_plots(plot_list, ncol = 5), filename = paste0("transfer_anchors/", colnames(prediction_results)[anchor_no], "_wrapped.jpeg"),
+#          width = 13, height = 7)
+#   plot_list <- list()
+# }
 
 
 ## 5.2. Loop through resolutions ----
@@ -308,7 +316,9 @@ ggsave(filename = "niche_res/CM_subcluster_umap_seurat_cluster_resolutions.jpeg"
 
 # Visualize clusters using clustree.
 x <- clustree(filtered_combined_samples) + labs(title = "Clustree all samples")
-clustree_plot <- clustree(filtered_combined_samples) + labs(title = "    Clustree all samples")
+clustree_plot <- clustree(filtered_combined_samples, node_text_size = 6, node_size = 8) 
++ labs(title = "    Clustree all samples") 
++ theme(text = element_text(size = 15))
 
 ggsave("06_clustree_filtered_combined_samples.jpeg", x,
        width = 10, height = 10)
@@ -913,9 +923,57 @@ gt(TCMRvsAMR_table) |> tab_header(title = md("**Upregulated and downregulated ge
 
 
 ## Figure xx - Barplot ----
-barplot_figure <- ggarrange(barplot_2, barplot_4, labels = c("A", "B"), font.label = list(size = 20))
-ggsave(plot = barplot_figure, filename = "Thesis_Fig_barplot.jpeg",
-       height = 6, width = 10)
+annotation <- c("Tubular: loop of Henle", #0
+                "Tubular: Proximal tubules (1)", #1
+                "Tubular: Distal tubules", #2
+                "Fibrotic", #3
+                "Tubular: Proximal tubules (2)", #4
+                "Mixed", #5
+                "Collecting duct", #6
+                "Immune niche", #7
+                "Glomeruli", #8
+                "Vascular niche", #9
+                "Renal capsule") #10
+
+barplot_2 <- dittoBarPlot(object = filtered_combined_samples,
+                          var = "seurat_clusters",
+                          group.by = "diag",
+                          scale = 'percent',
+                          main = "Composition of clusters per diagnosis (%)",
+                          legend.title = "Niche.",
+                          var.labels.rename = c("Tubular: loop of Henle", #0
+                                                "Tubular: Proximal tubules (1)", #1
+                                                "Renal capsule", #10
+                                                "Tubular: Distal tubules", #2
+                                                "Fibrotic/Inflammatory", #3
+                                                "Tubular: Proximal tubules (2)", #4
+                                                "Mixed", #5
+                                                "Collecting duct", #6
+                                                "Immune niche", #7
+                                                "Glomeruli", #8
+                                                "Vascular niche")) #9
+
+barplot_4 <- dittoBarPlot(object = filtered_combined_samples,
+                          var = "seurat_clusters",
+                          group.by = "orig.ident",
+                          scale = 'percent',
+                          main = "Composition of clusters per diagnosis (%)",
+                          legend.title = "Niche.",
+                          var.labels.rename = c("Tubular: loop of Henle", #0
+                                                "Tubular: Proximal tubules (1)", #1
+                                                "Renal capsule", #10
+                                                "Tubular: Distal tubules", #2
+                                                "Fibrotic/Inflammatory", #3
+                                                "Tubular: Proximal tubules (2)", #4
+                                                "Mixed", #5
+                                                "Collecting duct", #6
+                                                "Immune niche", #7
+                                                "Glomeruli", #8
+                                                "Vascular niche")) #9
+
+barplot_figure <- ggarrange(barplot_2 +NoLegend(), barplot_4, labels = c("A", "B"), font.label = list(size = 15))
+ggsave(plot = barplot_figure, filename = "Thesis_Fig_barplot_v2.1.jpeg",
+       height = 6, width = 12)
 
 ## Figure xx - Harmony, UMAP, dotplot, clustree ----
 # Variables
@@ -925,56 +983,21 @@ ggsave(plot = barplot_figure, filename = "Thesis_Fig_barplot.jpeg",
 # top10_dotplot
 # clustree_plot
 
-clustering_figure <- ggarrange(elbow_harmony,
-                               ggarrange(resolutions_plot_list[[2]], top3_dotplot, nrow = 2),
-                               clustree_plot, ncol = 3)
-# OPTION 1
-clustering_figure <- ggarrange(resolutions_plot_list[[2]],
-                               ggarrange(elbow_harmony, top3_dotplot, nrow = 2, labels = c("B", "C")),
-                               clustree_plot, ncol = 3, labels = c("A", "", "D"),
-                               font.label = list(size = 20))
-ggsave(plot = clustering_figure, filename = "Thesis_Fig_clustering.1.jpeg",
-       height = 10 , width = 25)
 
-# OPTION 2
-clustering_figure <- ggarrange(elbow_harmony,
-                               ggarrange(resolutions_plot_list[[2]], top3_dotplot, nrow = 2, labels = c("B", "C")),
-                               clustree_plot, ncol = 3, labels = c("A", "", "D"),
-                               font.label = list(size = 20))
-ggsave(plot = clustering_figure, filename = "Thesis_Fig_clustering.2.jpeg",
-       height = 10 , width = 25)
 
-# OPTION 3
+# OPTION 6
+before_harmony <- readRDS('umap_before_harmony')
 clustering_figure <- ggarrange(
-  ggarrange(elbow_harmony,resolutions_plot_list[[2]], nrow = 2, labels = c("A", "B")),
-  ggarrange(, top3_dotplot, nrow = 2, labels = c("C", "D")),
-  ggarrange(barplot_2, barplot_4, nrow = 2, labels = c("E", "F")),
-  ncol = 3,
-  font.label = list(size = 20))
-ggsave(plot = clustering_figure, filename = "Thesis_Fig_clustering.3.jpeg",
-       height = 15 , width = 25)
-
-# OPTION 4
-clustering_figure <- ggarrange(
-  ggarrange(elbow_harmony,clustree_plot, nrow = 2, labels = c("A", "B"), font.label = list(size = 20)),
-  resolutions_plot_list[[2]], labels = c("", "C"),
-  ggarrange(barplot_2, barplot_4, nrow = 2, labels = c("D", "E"), font.label = list(size = 20)),
-  ncol = 3,
-  font.label = list(size = 20))
-ggsave(plot = clustering_figure, filename = "Thesis_Fig_clustering.4.jpeg",
-       height = 18 , width = 25)
-
-# OPTION 5
-# clustering_figure <- ggarrange(
-#   ggarrange(elbow_harmony,clustree_plot, nrow = 2, labels = c("A", "B"), font.label = list(size = 15)),
-#   resolutions_plot_list[[2]], labels = c("", "C"),
-#   ggarrange(barplot_2, barplot_4, nrow = 2, labels = c("D", "E"), font.label = list(size = 15)),
-#   ncol = 3,
-#   font.label = list(size = 15))
-# ggsave(plot = clustering_figure, filename = "Thesis_Fig_clustering.5.jpeg",
-#        height = 18 , width = 25)
-
-
+  before_harmony + labs(title = "UMAP before Harmony integration") +
+    theme(text = element_text(size = 20)),
+  after_harmony + labs(title = "UMAP after Harmony integration") + 
+    theme(text = element_text(size = 20)),
+  clustree_plot + theme(text = element_text(size = 14), legend.text = element_text(size = 17), legend.title = element_text(size = 17)),
+  resolutions_plot_list[[2]]  + 
+    theme(text = element_text(size = 20)),
+          labels = c("A", "B", "C", "D"))
+ggsave(plot = clustering_figure, filename = "Thesis_Fig_clustering.6.jpeg",
+       height = 20 , width = 25)
 
 ## Figure xx - dotplot ----
 library(gt)
@@ -996,246 +1019,61 @@ annotation_table <- data.frame(cluster_no, annotation)
 colnames(annotation_table) <- c("Cluster", "Annotation")
 
 gt(annotation_table) |> 
-  tab_options(table.font.names = "Cambria", table.font.size = 25) |>
+  tab_options(table.font.names = "Cambria", table.font.size = 30) |>
   gtsave("test.png")
 
 dotplot_fig <- ggarrange(
-  ggarrange(top3_dotplot, ggdraw() + draw_image("test.png"), labels = c("A", "C"), widths = c(3,1),
+  ggarrange(top3_dotplot + theme(legend.text = element_text(size = 16), legend.title = element_text(size = 16)), ggdraw() + draw_image("test.png"), labels = c("A", "C"), widths = c(3,1),
             font.label = list(size = 20)),
-  top10_dotplot, nrow = 2, labels = c("", "B"),
+  top10_dotplot+ theme(legend.text = element_text(size = 16), legend.title = element_text(size = 16),
+                       axis.text.x = element_text(size = 14, angle = 90)),
+  nrow = 2, labels = c("", "B"),
   font.label = list(size = 20))
 
-ggsave(plot = dotplot_fig, filename = "Thesis_Fig3_dotplots_annotation.jpeg",
+ggsave(plot = dotplot_fig, filename = "Thesis_Fig3_dotplots_annotation_2.jpeg",
        width = 20, height = 10)
 
 
 
-# Removed from analysis / OLD ----
-## 9.4. IFTA vs [AMR and HLAi] ----
-IFTAvsAMR_HLAi <- FindMarkers(filtered_combined_samples,
-                              ident.1 = "IFTA", ident.2 = c('aAMR, C4d+','HLAi'))
-IFTAvsAMR_HLAi <- IFTAvsAMR_HLAi[IFTAvsAMR_HLAi$p_val_adj != 0 & IFTAvsAMR_HLAi$p_val_adj <= 0.05,]
-# Add genes as separate column.
-IFTAvsAMR_HLAi$gene <- rownames(IFTAvsAMR_HLAi)
+## Figure xx - anchors ----
+# anchor_data <- filtered_combined_samples@meta.data[,20:50]
+# dittoBarPlot(anchor_data)
+## Figure xx - venn diagram ----
+# library(VennDetail)
+# 
+# overlapping_genes <- venndetail(list('aTCMR vs IF/TA' = TCMRvsIFTA$gene,
+#                                      'aAMR vs IF/TA' = AMRvsIFTA$gene,
+#                                      'aTCMR vs aAMR' = TCMRvsAMR$gene))
+# plot(overlapping_genes) 
 
-IFTAvsAMR_HLAi$up_down <- "NA"
-IFTAvsAMR_HLAi$up_down[IFTAvsAMR_HLAi$avg_log2FC > 0.6] <- "UP"
-IFTAvsAMR_HLAi$up_down[IFTAvsAMR_HLAi$avg_log2FC < -0.6] <- "DOWN"
+library(ggVennDiagram)
+TCMRvsIFTA_up <- filter(TCMRvsIFTA, up_down == 'UP')
+AMRvsIFTA_up <- filter(AMRvsIFTA, up_down == 'UP')
+TCMRvsAMR_up <- filter(TCMRvsAMR, up_down == 'UP')
+  
+overlapping_genes <- list('aTCMR vs IF/TA' = TCMRvsIFTA_up$gene,
+                          'aAMR vs IF/TA' = AMRvsIFTA_up$gene,
+                          'aTCMR vs aAMR' = TCMRvsAMR_up$gene)
 
-# Label genes of interest.
-interest <- filter(IFTAvsAMR_HLAi, (avg_log2FC > 4 | avg_log2FC < -3 | p_val_adj < (1/(10^200))))
+VennDia_up <- ggVennDiagram(overlapping_genes, label_alpha = 0, set_size = 3.2, label_size = 6) +
+  labs(title = "Venn diagram of differentially expressed upregulated genes") + 
+  scale_fill_gradient(low="grey90", high = 'cornflowerblue')
+ggsave(plot = VennDia_up, filename = 'Venndia_upregulated.jpeg')
 
-to_save <- ggplot(IFTAvsAMR_HLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                      colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "IFTA vs [AMR and HLAi]", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf) +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
+TCMRvsIFTA_down <- filter(TCMRvsIFTA, up_down == 'DOWN')
+AMRvsIFTA_down <- filter(AMRvsIFTA, up_down == 'DOWN')
+TCMRvsAMR_down <- filter(TCMRvsAMR, up_down == 'DOWN')
 
-# Save as Excel file & save volcano plot.
-write_xlsx(IFTAvsAMR_HLAi, path = "volcano_plots/02_IFTAvsAMR_HLAi.xlsx")
-ggsave("volcano_plots/04_IFTAvsAMR_HLAi.jpeg", plot = to_save,
-       width = 10)
+overlapping_genes <- list('aTCMR vs IF/TA' = TCMRvsIFTA_down$gene,
+                          'aAMR vs IF/TA' = AMRvsIFTA_down$gene,
+                          'aTCMR vs aAMR' = TCMRvsAMR_down$gene)
 
-## 9.5. IFTA vs HLAi ----
-IFTAvsHLAi <- FindMarkers(filtered_combined_samples,
-                          ident.1 = 'IFTA', ident.2 = 'HLAi')
-IFTAvsHLAi <- IFTAvsHLAi[IFTAvsHLAi$p_val_adj != 0 & IFTAvsHLAi$p_val_adj <= 0.05,]
-# Add genes as separate column.
-IFTAvsHLAi$gene <- rownames(IFTAvsHLAi)
+VennDia_down <- ggVennDiagram(overlapping_genes, label_alpha = 0, set_size = 3.2, label_size = 6) +
+  labs(title = "Venn diagram of differentially expressed downregulated genes") + 
+  scale_fill_gradient(low="grey90", high = 'cornflowerblue')
+ggsave(plot = VennDia_down, filename = 'Venndia_downregulated.jpeg')
 
-IFTAvsHLAi$up_down <- "NA"
-IFTAvsHLAi$up_down[IFTAvsHLAi$avg_log2FC > 0.6] <- "UP"
-IFTAvsHLAi$up_down[IFTAvsHLAi$avg_log2FC < -0.6] <- "DOWN"
-
-# Label genes of interest.
-interest <- filter(IFTAvsHLAi, (avg_log2FC > 3.5 | avg_log2FC < -3 | p_val_adj < (1/(10^150))))
-
-to_save <- ggplot(IFTAvsHLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                  colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "IFTA vs HLAi", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf) +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
-
-# Save as Excel file & save volcano plot.
-write_xlsx(IFTAvsHLAi, path = "volcano_plots/04_IFTAvsHLAi.xlsx")
-ggsave("volcano_plots/05_IFTAvsHLAi.jpeg", plot = to_save,
-       width = 10)
-
-## 9.6. TCMR vs [AMR and HLAi] ----
-TCMRvsAMR_HLAi <- FindMarkers(filtered_combined_samples,
-                              ident.1 = c("aTCMR1B", "aTCMR2B"), ident.2 = c('aAMR, C4d+','HLAi'))
-TCMRvsAMR_HLAi <- TCMRvsAMR_HLAi[TCMRvsAMR_HLAi$p_val_adj != 0 & TCMRvsAMR_HLAi$p_val_adj <= 0.05,]
-# Add genes as separate column.
-TCMRvsAMR_HLAi$gene <- rownames(TCMRvsAMR_HLAi)
-
-TCMRvsAMR_HLAi$up_down <- "NA"
-TCMRvsAMR_HLAi$up_down[TCMRvsAMR_HLAi$avg_log2FC > 0.6] <- "UP"
-TCMRvsAMR_HLAi$up_down[TCMRvsAMR_HLAi$avg_log2FC < -0.6] <- "DOWN"
-
-# Label genes of interest.
-interest <- filter(TCMRvsAMR_HLAi, (avg_log2FC > 5 | avg_log2FC < -3 | p_val_adj < (1/(10^235))))
-
-to_save <- ggplot(TCMRvsAMR_HLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                      colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "TCMR vs [AMR and HLAi]", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf) +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
-
-# Save as Excel file & save volcano plot.
-write_xlsx(TCMRvsAMR_HLAi, path = "volcano_plots/05_TCMRvsAMR_HLAi.xlsx")
-ggsave("volcano_plots/06_TCMRvsAMR_HLAi.jpeg", plot = to_save,
-       width = 10)
-
-## 9.7. TCMR vs HLAi ----
-TCMRvsHLAi <- FindMarkers(filtered_combined_samples,
-                          ident.1 = c('aTCMR1B', 'aTCMR2B'), ident.2 = 'HLAi')
-TCMRvsHLAi <- TCMRvsHLAi[TCMRvsHLAi$p_val_adj != 0 & TCMRvsHLAi$p_val_adj <= 0.05,]
-
-# Add genes as separate column.
-TCMRvsHLAi$gene <- rownames(TCMRvsHLAi)
-
-TCMRvsHLAi$up_down <- "NA"
-TCMRvsHLAi$up_down[TCMRvsHLAi$avg_log2FC > 0.6] <- "UP"
-TCMRvsHLAi$up_down[TCMRvsHLAi$avg_log2FC < -0.6] <- "DOWN"
-
-# Label genes of interest.
-interest <- filter(TCMRvsHLAi, (avg_log2FC > 5 | avg_log2FC < -2 | p_val_adj < (1/(10^200))))
-
-to_save <- ggplot(TCMRvsHLAi, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                  colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 6, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "TCMR vs HLAi", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf) +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
-
-# Save as Excel file & save volcano plot.
-write_xlsx(TCMRvsHLAi, path = "volcano_plots/07_TCMRvsHLAi.xlsx")
-ggsave("volcano_plots/07_TCMRvsHLAi.jpeg", plot = to_save,
-       width = 10)
-
-print("!!! STEP 9 FINISHED. !!!")
-
-
-
-## STEP 9: Volcano plots ----
-## 9.1. IFTA vs TCMR ----
-Idents(filtered_combined_samples) <- "diag"
-IFTAvsTCMR <- FindMarkers(filtered_combined_samples,
-                          ident.1 = "IFTA", ident.2 = c('aTCMR1B','aTCMR2B'))
-IFTAvsTCMR <- IFTAvsTCMR[IFTAvsTCMR$p_val_adj <= 0.05,]
-# Add genes as separate column.
-IFTAvsTCMR$gene <- rownames(IFTAvsTCMR)
-
-IFTAvsTCMR$up_down <- "NA"
-IFTAvsTCMR$up_down[IFTAvsTCMR$avg_log2FC > 0.6] <- "UP"
-IFTAvsTCMR$up_down[IFTAvsTCMR$avg_log2FC < -0.6] <- "DOWN"
-
-# Label genes of interest.
-interest <- filter(IFTAvsTCMR, (avg_log2FC > 3 | avg_log2FC < -3 | p_val_adj < (1/(10^290))))
-
-volcano_IFTAvsTCMR <- ggplot(IFTAvsTCMR, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                             colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 5, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "IFTA vs TCMR", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
-
-# Save as Excel file & save volcano plot.
-write_xlsx(IFTAvsTCMR, path = "volcano_plots/01_IFTAvsTCMR.xlsx")
-ggsave("volcano_plots/01_IFTAvsTCMR.jpeg", plot = volcano_IFTAvsTCMR,
-       height = 10, width = 10)
-
-
-## 9.2. IFTA vs AMR ----
-IFTAvsAMR <- FindMarkers(filtered_combined_samples,
-                         ident.1 = "IFTA",
-                         ident.2 = 'aAMR, C4d+')
-IFTAvsAMR <- IFTAvsAMR[IFTAvsAMR$p_val_adj <= 0.05,]
-# Add genes as separate column.
-IFTAvsAMR$gene <- rownames(IFTAvsAMR)
-
-IFTAvsAMR$up_down <- "NA"
-IFTAvsAMR$up_down[IFTAvsAMR$avg_log2FC > 0.6] <- "UP"
-IFTAvsAMR$up_down[IFTAvsAMR$avg_log2FC < -0.6] <- "DOWN"
-
-# Label genes of interest.
-interest <- filter(IFTAvsAMR, (avg_log2FC > 6 | avg_log2FC < -2 | p_val_adj < (1/(10^200)) | 
-                                 avg_log2FC > 3 & p_val_adj < (1/(10^150))))
-
-volcano_IFTAvsAMR <- ggplot(IFTAvsAMR, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                           colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 8, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "IFTA vs AMR", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
-
-# Save as Excel file & save volcano plot.
-write_xlsx(IFTAvsAMR, path = "volcano_plots/02_IFTAvsAMR.xlsx")
-ggsave("volcano_plots/02_IFTAvsAMR.jpeg", plot = volcano_IFTAvsAMR,
-       height = 10, width = 10)
-
-## 9.3. TCMR vs AMR ----
-TCMRvsAMR <- FindMarkers(filtered_combined_samples,
-                         ident.1 = c('aTCMR1B', 'aTCMR2B'), ident.2 = 'aAMR, C4d+')
-TCMRvsAMR <- TCMRvsAMR[TCMRvsAMR$p_val_adj <= 0.05,]
-# Add genes as separate column.
-TCMRvsAMR$gene <- rownames(TCMRvsAMR)
-
-TCMRvsAMR$up_down <- "NA"
-TCMRvsAMR$up_down[TCMRvsAMR$avg_log2FC > 0.6] <- "UP"
-TCMRvsAMR$up_down[TCMRvsAMR$avg_log2FC < -0.6] <- "DOWN"
-
-# Label genes of interest.
-interest <- filter(TCMRvsAMR, (avg_log2FC > 7 | avg_log2FC < -3 | p_val_adj < (1/(10^235))))
-
-volcano_TCMRvsAMR <- ggplot(TCMRvsAMR, aes(x = avg_log2FC, y = -log10(p_val_adj),
-                                           colour = up_down, label = gene)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(0.05), col = "grey", linetype = 'dashed') +
-  annotate("text", x = 12, y = 8, label = 'p = 0.05', col = "gray47") +
-  geom_vline(xintercept = c(-0.6, 0.6), col = "grey", linetype = 'dashed') +
-  scale_color_manual(values = c("cornflowerblue", "grey", "red"), 
-                     labels = c("Downregulated", "Not significant", "Upregulated")) +
-  labs(title = "TCMR vs AMR", color = "") +
-  geom_text_repel(data = interest, max.overlaps = Inf, colour = "black") +
-  guides(colour = guide_legend(override.aes = aes(label = "")))
-
-# Save as Excel file & save volcano plot.
-write_xlsx(TCMRvsAMR, path = "volcano_plots/03_TCMRvsAMR.xlsx")
-ggsave("volcano_plots/06_TCMRvsAMR.jpeg", plot = volcano_TCMRvsAMR,
-       height = 10, width = 10)
-
+Venndia_plot <- ggarrange(VennDia_up, VennDia_down, labels = c("A", "B"))
+ggsave(plot = Venndia_plot, filename = 'Venndia_mixed.jpeg',
+       width = 14)
 
