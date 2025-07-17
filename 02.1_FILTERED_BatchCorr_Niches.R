@@ -820,6 +820,47 @@ ggsave("volcano_plots/03_TCMRvsAMR.jpeg", plot = volcano_TCMRvsAMR,
 
 
 
+# STEP 10: Spatially visualize found differentially expressed genes ----
+## 10.1. Example to show spatial plot ----
+# Create a copy of Seurat object
+filtered_combined_samples_copy <- filtered_combined_samples
+# Rename levels to found niches
+levels(filtered_combined_samples_copy$Spatial_snn_res.0.4) <- c("0" = "Tubular: loop of Henle",
+                                                                "1" = "Tubular: Proximal tubules (1)",
+                                                                "2" = "Tubular: Distal tubules",
+                                                                "3" = "Fibrotic",
+                                                                "4" = "Tubular: Proximal tubules (2)",
+                                                                "5" = "Mixed",
+                                                                "6" = "Collecting duct",
+                                                                "7" = "Immune",
+                                                                "8" = "Glomeruli",
+                                                                "9" = "Vascular",
+                                                                "10" = "Renal capsule")
+# Create spatial dimension plot
+plot_request <- SpatialDimPlot(filtered_combined_samples_copy, group.by = "Spatial_snn_res.0.4", 
+                               images = "H16-8962", crop = F, pt.size.factor = 1.5, stroke = 0.5) +
+  ggtitle("Spatial dimension plot of IF/TA sample") + 
+  theme(plot.title = element_text(size = 15), 
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10)) + 
+  guides(fill = guide_legend(override.aes = list(size = 5))) + 
+  labs(fill = "Niches")
+# Save plot
+ggsave(plot_request, filename = "10.6_spatialplot_example.jpeg")
+
+## 10.2. Visualize genes ----
+Ig_spatial_plot <- SpatialFeaturePlot(filtered_combined_samples, 
+                                      images = c("H16-8962", "H14-23350", 
+                                                 "H16-9676", "H16-8593", 
+                                                 "H16-13550", "H16-5999"),  
+                                      features = c("IGHG3", "IGHG1", "IGKC", 
+                                                   "IGLC1", "JCHAIN"), 
+                                      pt.size.factor = 0.5) + 
+  plot_annotation(title = "Spatial expression of immunoglobulin genes across IF/TA samples")
+# Save plot
+ggsave(Ig_spatial_plot, filename = "10.7_Ig_expression_spatial_2.jpeg",
+       height = 15, width = 20, limitsize = FALSE)
+
 # Thesis figures ----
 ## Figure xx - Volcano plots ----
 # Fig_VolcanoPlots <- ggarrange(ggarrange((volcano_TCMRvsIFTA + NoLegend()), (volcano_AMRvsIFTA + NoLegend()), ncol = 2, labels = c("A", "B")),
